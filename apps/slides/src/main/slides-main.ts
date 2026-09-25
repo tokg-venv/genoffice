@@ -249,7 +249,7 @@ import {
   getFontMetrics,
   resetFontMetrics,
   journalOps,
-  makeMediaResolver,
+  makeLazyMediaResolver,
   pushHistory,
   rebuildSlide,
   rebuildSlideWithReparse,
@@ -2713,7 +2713,7 @@ export function registerSlidesIpc(): void {
     if (!me) return null
     return buildRenderSlide(me.slide, session.opened.deck.size, {
       fitWidthPx: session.fitWidthPx,
-      media: makeMediaResolver(session.opened),
+      media: makeLazyMediaResolver(session.opened),
       metrics: getFontMetrics(),
     })
   }
@@ -2740,7 +2740,7 @@ export function registerSlidesIpc(): void {
       if (!slide) continue
       const rendered = buildRenderSlide(slide, session.opened.deck.size, {
         fitWidthPx,
-        media: makeMediaResolver(session.opened),
+        media: makeLazyMediaResolver(session.opened),
         metrics: getFontMetrics(),
       })
       items.push({ partPath: p.partPath, kind: p.kind, name: p.name, slide: rendered })
