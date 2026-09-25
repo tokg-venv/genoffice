@@ -148,11 +148,15 @@ export async function decodeCapped(url: string, maxSide: number): Promise<SlideI
     const ctx = canvas.getContext('2d')
     if (!ctx) return await loadElement(sourceUrl)
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-    // PNG keeps its format: screenshots and anything with alpha should not be re-encoded
-    // lossily; everything else goes to WebP, which keeps alpha and compresses harder.
+    // WebP, not PNG: re-encoding a 2560 px canvas as PNG costs 150-400 ms, which is
+    // how this turned into a *negative* optimization the first time round — the decode
+    // queue doubled (25 -> 47) and rows sat as placeholders while scrolling. Chromium's
+    // WebP encoder is several times faster and smaller at the same quality, and with
+    // quality 1 it is lossless, so a PNG source keeps its pixels: the only fidelity
+    // trade left is the downscale itself, which is the part to be agreed on.
     const isPng = /^data:image\/png/i.test(sourceUrl)
     const capped = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), isPng ? 'image/png' : 'image/webp', 0.92),
+      canvas.toBlob((b) => resolve(b), 'image/webp', isPng ? 1 : 0.92),
     )
     if (!capped) return await loadElement(sourceUrl)
     return await elementFromBlob(capped)

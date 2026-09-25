@@ -102,13 +102,14 @@ describe('decodeCapped', () => {
     expect(decoded.some((u) => u.startsWith('blob:capped:'))).toBe(false)
   })
 
-  it('caps PNG too and keeps it PNG (screenshots are the big ones on the measured deck)', async () => {
+  it('caps PNG and re-encodes it losslessly as WebP (PNG encoding is the slow path)', async () => {
     const url = 'data:image/png;base64,CCCC'
     sizes.set(url, { w: 4000, h: 3000 })
     const image = await decodeCapped(url, 2560)
     expect(image!.naturalWidth).toBe(2560)
     expect(image!.naturalHeight).toBe(1920)
-    expect(encodeMimes.at(-1)).toBe('image/png') // not re-encoded lossily
+    // quality 1 = lossless in Chromium's WebP encoder: the downscale is the only trade
+    expect(encodeMimes.at(-1)).toBe('image/webp')
   })
 
   it('uses WebP for the lossy sources', async () => {
