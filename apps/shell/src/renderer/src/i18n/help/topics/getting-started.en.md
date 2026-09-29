@@ -14,7 +14,7 @@ The window has three parts:
 
 Any of:
 
-- Click a quick-create card in the **Quick start** section of **Home** (AI Docs, AI Sheets, AI Slides, ...).
+- Click a quick-create card in the [Quick start](help://getting-started) section of **Home** (AI Docs, AI Sheets, AI Slides, ...).
 - Menu **File ▸ New**: Docs (⌘N/ctrl+N), Sheets, Slides, Markdown, HTML or PDF.
 - Drag a file onto the window, or double-click it in your file manager (if GenOffice is the default app).
 
@@ -47,7 +47,7 @@ Shortcuts inside each editor (format painter, find & replace, table ops, ...) ar
 
 ## Where to go next
 
-- Where files live: **The Home screen**.
-- Managing many open files: **Tabs and window management**.
-- Having the AI do the work: **The AI assistant panel**.
-- Language, theme, default apps: **Settings, language, theme and MCP integrations**.
+- Where files live: [The Home screen](help://home-screen).
+- Managing many open files: [Tabs and window management](help://tabs-and-windows).
+- Having the AI do the work: [The AI assistant panel](help://ai-panel).
+- Language, theme, default apps: [Settings, language, theme and MCP integrations](help://settings-integrations).

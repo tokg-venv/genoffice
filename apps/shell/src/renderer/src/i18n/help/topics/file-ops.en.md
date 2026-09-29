@@ -7,7 +7,7 @@ This chapter covers the file operations shared by every editor; each editor's ow
 Two entry points, one set of checks:
 
 - Home's row **⋯ ▸ Rename**.
-- **Double-click a file tab** to rename inline (see Tabs and window management).
+- **Double-click a file tab** to rename inline (see [Tabs and window management](help://tabs-and-windows)).
 
 Rules: the extension is preserved automatically; illegal characters, trailing dots and reserved names (CON/NUL and friends) are rejected with a message; a same-folder name conflict is blocked too. The real file on disk is renamed, and recents and stars follow.
 
@@ -25,7 +25,7 @@ Rules: the extension is preserved automatically; illegal characters, trailing do
 - **⌘S / ctrl+S** saves the current file; an untitled file asks for location and name first.
 - **Save As** writes a new file and leaves the original untouched; subsequent edits target the new file.
 - Every save is atomic (temp file + rename); a mid-write quit cannot corrupt the file.
-- Autosave only kicks in after the first manual save (see Quick start).
+- Autosave only kicks in after the first manual save (see [Quick start](help://getting-started)).
 
 ## Export to PDF
 

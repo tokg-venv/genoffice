@@ -18,7 +18,7 @@ Slides is the PowerPoint-like editor: reads and writes genuine .pptx.
 ## AI generation
 
 - Home's AI Slides card: give a topic or outline and the AI builds the deck; cloud generation falls back to local generation on failure.
-- Keep adjusting with the AI panel afterwards (the AI restyles through a controlled script sandbox — same class of mechanism as in the Sheets chapter).
+- Keep adjusting with the AI panel afterwards (the AI restyles through a controlled script sandbox — the same sandbox mechanism as in [Sheets](help://sheets)).
 
 ## Present and export
 
