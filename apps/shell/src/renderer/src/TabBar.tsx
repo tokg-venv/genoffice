@@ -47,7 +47,6 @@ function PdfIcon() {
   )
 }
 
-
 function HelpIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 240 240" fill="none" aria-hidden="true">

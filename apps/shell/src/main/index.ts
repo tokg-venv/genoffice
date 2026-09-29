@@ -3084,13 +3084,13 @@ function createShellWindow(): void {
         ? tm('menuUserGuide')
         : kind === 'docs'
           ? tm('untitledDoc')
-        : kind === 'slides'
-          ? tm('untitledDeck')
-          : kind === 'markdown'
-            ? tm('untitledMarkdown')
-            : kind === 'html'
-              ? tm('untitledHtml')
-              : tm('untitledSheet'),
+          : kind === 'slides'
+            ? tm('untitledDeck')
+            : kind === 'markdown'
+              ? tm('untitledMarkdown')
+              : kind === 'html'
+                ? tm('untitledHtml')
+                : tm('untitledSheet'),
   )
   tabManager = manager
 
@@ -4032,7 +4032,7 @@ function registerHomeIpc(): void {
     }
   })
 
-    ipcMain.handle(HOME_CHANNELS.openHelp, () => {
+  ipcMain.handle(HOME_CHANNELS.openHelp, () => {
     tabManager?.openHelpTab()
   })
   ipcMain.handle(HOME_CHANNELS.getLanguage, (): Lang => currentLang())
