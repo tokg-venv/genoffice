@@ -1,0 +1,155 @@
+/* In-app manual (help tab): sidebar topics + searchable markdown body.
+   Shares the home screen's token vocabulary (--accent etc. via tokens.css). */
+
+.help-root {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--go-bg, #f5f7fa);
+}
+
+.help-side {
+  width: 264px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(125, 125, 135, 0.18);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.help-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 8px;
+}
+
+.help-search {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(125, 125, 135, 0.3);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.8);
+  color: inherit;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+.help-search:focus {
+  outline: 2px solid var(--go-accent, #4f7cf0);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.help-hit-count {
+  font-size: 11.5px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.help-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px 16px;
+}
+
+.help-group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+  margin: 14px 8px 4px;
+}
+
+.help-topic {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.help-topic:hover {
+  background: rgba(125, 125, 135, 0.12);
+}
+.help-topic.active {
+  background: var(--go-accent-soft, rgba(79, 124, 240, 0.14));
+  color: var(--go-accent, #4f7cf0);
+  font-weight: 600;
+}
+
+.help-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.help-article {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 40px 44px 80px;
+  font-size: 15px;
+  line-height: 1.75;
+}
+.help-article h1 {
+  font-size: 26px;
+  line-height: 1.35;
+  margin: 0 0 6px;
+}
+.help-article h2 {
+  font-size: 19px;
+  margin: 34px 0 8px;
+}
+.help-article h3 {
+  font-size: 16px;
+  margin: 24px 0 6px;
+}
+.help-article table {
+  border-collapse: collapse;
+  font-size: 13.5px;
+  margin: 12px 0;
+}
+.help-article th,
+.help-article td {
+  border: 1px solid rgba(125, 125, 135, 0.3);
+  padding: 6px 10px;
+  text-align: left;
+}
+.help-article th {
+  background: rgba(125, 125, 135, 0.1);
+}
+.help-article pre {
+  background: rgba(125, 125, 135, 0.1);
+  border: 1px solid rgba(125, 125, 135, 0.22);
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.help-article code {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: rgba(125, 125, 135, 0.14);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.help-article pre code {
+  background: none;
+  padding: 0;
+}
+.help-article blockquote {
+  margin: 10px 0;
+  padding: 2px 14px;
+  border-left: 3px solid var(--go-accent, #4f7cf0);
+  opacity: 0.85;
+}
+
+.help-missing {
+  opacity: 0.6;
+  font-style: italic;
+}
