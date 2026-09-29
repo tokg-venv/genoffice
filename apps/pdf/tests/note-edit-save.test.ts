@@ -179,4 +179,90 @@ describe('note edit save', () => {
     expect(reply.irt?.objectNumber).toBe(rootObjNum)
     expect(all.some((a) => a.contents === 'Rewritten comment')).toBe(true)
   })
+
+  it('reports an unmatched edit as skipped instead of silently succeeding', async () => {
+    const { bytes } = await fixtureWithThread()
+    const {
+      bytes: out,
+      skippedNoteEdits,
+      appliedDrawings,
+    } = await applySaveRequest(
+      bytes,
+      request({ noteEdits: [edit({ objNum: 9999, rect: [1, 1, 9, 9], oldContents: 'gone' })] }),
+    )
+    // The bytes stay untouched (same degradation as before) and the failure is
+    // now visible so the renderer keeps the edit pending
+    expect((await textAnnots(out)).map((a) => a.contents).sort()).toEqual([
+      'Original comment',
+      'Saved reply',
+    ])
+    expect(skippedNoteEdits).toEqual([
+      { index: 0, pageIndex: 0, reason: 'no matching note annotation (rect + contents)' },
+    ])
+    expect(appliedDrawings).toEqual([])
+  })
+
+  it('reports skipped note edits by index and applies the rest of the batch', async () => {
+    const { bytes, rootObjNum } = await fixtureWithThread()
+    const { bytes: out, skippedNoteEdits } = await applySaveRequest(
+      bytes,
+      request({
+        noteEdits: [
+          edit({ objNum: rootObjNum }),
+          edit({ objNum: 9999, rect: [1, 1, 9, 9], oldContents: 'gone' }),
+        ],
+      }),
+    )
+    expect(skippedNoteEdits.map((s) => s.index)).toEqual([1])
+    expect((await textAnnots(out)).some((a) => a.contents === 'Rewritten comment')).toBe(true)
+  })
+
+  it('matches an edit whose old contents differ only by whitespace or normalization', async () => {
+    const { bytes } = await fixtureWithThread()
+    // NBSP + a doubled space survive a decode round-trip unevenly across viewers;
+    // the normalized compare still finds the annotation
+    const { bytes: out, skippedNoteEdits } = await applySaveRequest(
+      bytes,
+      request({
+        noteEdits: [edit({ objNum: 9999, oldContents: 'Original\u00a0 comment' })],
+      }),
+    )
+    expect(skippedNoteEdits).toEqual([])
+    expect((await textAnnots(out)).some((a) => a.contents === 'Rewritten comment')).toBe(true)
+  })
+
+  it('reports the applied drawings with the written note object number', async () => {
+    const { bytes } = await fixtureWithThread()
+    const {
+      bytes: out,
+      appliedDrawings,
+      skippedNoteEdits,
+    } = await applySaveRequest(
+      bytes,
+      request({
+        drawings: [
+          {
+            kind: 'note',
+            pageIndex: 0,
+            color: [1, 0.78, 0.13],
+            at: [300, 700],
+            contents: 'fresh note',
+          },
+          {
+            kind: 'note',
+            pageIndex: 42,
+            color: [1, 0.78, 0.13],
+            at: [300, 700],
+            contents: 'on a page that does not exist',
+          },
+        ],
+      }),
+    )
+    expect(skippedNoteEdits).toEqual([])
+    expect(appliedDrawings).toHaveLength(1)
+    expect(appliedDrawings[0]!.index).toBe(0)
+    // The reported object number is the annotation the save actually wrote
+    const note = (await textAnnots(out)).find((a) => a.contents === 'fresh note')!
+    expect(note.ref.objectNumber).toBe(appliedDrawings[0]!.objNum)
+  })
 })

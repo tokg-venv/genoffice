@@ -17,6 +17,7 @@ import {
   shrinkTargets,
   isCompressible,
   measuresAlignment,
+  shrinkForGlyph,
   shrinkStyle,
   usesEastAsianRules,
   type HangLineChars,
@@ -286,5 +287,24 @@ describe('mapTextNodes', () => {
     expect(mapTextNodes(p, fakePara([text('abcd')]), 0, ea)).toBeNull()
     p.innerHTML = 'ab<img>cd'
     expect(mapTextNodes(p, fakePara([text('ab'), image, text('cd')]), 0, ea)).toBeNull()
+  })
+})
+
+describe('shrinkForGlyph', () => {
+  it('never pulls a line-final opening bracket over the preceding character', () => {
+    // （ ends the line: its blank half faces body text, so the negative left
+    // margin would only cover the previous glyph and scramble the carets
+    expect(shrinkForGlyph('（', 3.2, 10.5, true)).toBeNull()
+    // mid-line the compression is legitimate
+    expect(shrinkForGlyph('（', 3.2, 10.5, false)).toBe(3.2)
+    // a closing glyph may still compress at line end (trailing stops shrink
+    // their trailing blank, which faces nothing)
+    expect(shrinkForGlyph('。', 3.2, 10.5, true)).toBe(3.2)
+  })
+
+  it('caps the pull at half the glyph advance so the neighbouring carets stay apart', () => {
+    expect(shrinkForGlyph('。', 9, 10.5, false)).toBe(5.25)
+    expect(shrinkForGlyph('（', 9, 10.5, false)).toBe(5.25)
+    expect(shrinkForGlyph('。', 3, 10.5, false)).toBe(3)
   })
 })

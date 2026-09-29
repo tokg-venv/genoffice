@@ -993,11 +993,13 @@ function registerPdfIpc(): void {
       request = { ...request, redactions: regions }
     }
     try {
-      const { skippedTextEdits, skippedTextInserts, skippedImageEdits } = await savePdfToPath(
-        path,
-        target,
-        request,
-      )
+      const {
+        skippedTextEdits,
+        skippedTextInserts,
+        skippedImageEdits,
+        skippedNoteEdits,
+        appliedDrawings,
+      } = await savePdfToPath(path, target, request)
       if (request.redactions !== undefined) {
         // Commit document identity only after the atomic write succeeds. Revoke the
         // source grant so stale renderer requests cannot write back to the original.
@@ -1015,6 +1017,8 @@ function registerPdfIpc(): void {
         ...(skippedTextEdits.length > 0 ? { skippedTextEdits } : {}),
         ...(skippedTextInserts.length > 0 ? { skippedTextInserts } : {}),
         ...(skippedImageEdits.length > 0 ? { skippedImageEdits } : {}),
+        ...(skippedNoteEdits.length > 0 ? { skippedNoteEdits } : {}),
+        ...(appliedDrawings.length > 0 ? { appliedDrawings } : {}),
       }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }

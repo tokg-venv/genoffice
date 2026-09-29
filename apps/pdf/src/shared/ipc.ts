@@ -525,6 +525,21 @@ export interface TextInsertFailure {
   reason: string
 }
 
+/** A note edit that matched no annotation at save time. `index` addresses the
+    request's noteEdits array so the renderer can identify its pending entry. */
+export interface NoteEditFailure {
+  index: number
+  pageIndex: number
+  reason: string
+}
+
+/** A request drawing the main process actually wrote; `objNum` is the object
+    number of a written note annotation (null for every other kind). */
+export interface AppliedDrawing {
+  index: number
+  objNum: number | null
+}
+
 /** Answer to autoRename; `path`/`name` present when renamed */
 export interface PdfAutoRenameResult {
   renamed: boolean
@@ -538,6 +553,15 @@ export type SavePdfResult =
       skippedTextEdits?: TextEditFailure[]
       skippedTextInserts?: TextInsertFailure[]
       skippedImageEdits?: ImageEditFailure[]
+      /** Note edits that matched no annotation on disk. The renderer keeps them
+          pending (and shows a notice) instead of subtracting them — subtracting a
+          skipped edit silently discarded the user's text (#1518-class). */
+      skippedNoteEdits?: NoteEditFailure[]
+      /** Which request.drawings were actually written (index into the request's
+          drawings array), with the object number of written note annotations so
+          the renderer can retarget a later edit at the saved annotation. Absent
+          from older responses → treat every drawing as applied. */
+      appliedDrawings?: AppliedDrawing[]
     }
   | { ok: false; error: string }
 

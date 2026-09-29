@@ -95,6 +95,27 @@ export function shrinkStyle(ch: string, perChar: number, baseLs: number): string
     ? `margin-left:${px(-perChar)}px`
     : `letter-spacing:${px(baseLs - perChar)}px`
 }
+
+/**
+ * The shrink actually decorated onto one glyph, or null for none.
+ *
+ * Two guards keep the decoration from scrambling the caret around the glyph:
+ * an opening bracket that ends its rendered line must not compress — its blank
+ * half faces the preceding body text, so the negative left margin only pulls
+ * the glyph over that character (and Chromium wraps a line-end opener by
+ * kinsoku anyway, so the compression cannot change the break); and the pull is
+ * capped at half the glyph's own advance so the two caret positions on either
+ * side of the glyph stay visibly apart instead of collapsing onto one x.
+ */
+export function shrinkForGlyph(
+  ch: string,
+  perChar: number,
+  glyphWidth: number,
+  lineLast: boolean,
+): number | null {
+  if (lineLast && COMPRESSIBLE_OPEN.has(ch)) return null
+  return Math.min(perChar, glyphWidth / 2)
+}
 const CJK_RE = /[⺀-〿぀-ヿㇰ-䶿一-鿿豈-﫿＀-￯]/
 
 /** voluntary pull cap: Word accepted 25.2% and declined 28.6% per glyph (probes) */
@@ -748,11 +769,14 @@ class CjkPunctShrinkView {
     const decisions = decideCjkShrinks(lineModels)
     for (let k = 0; k < decisions.length; k++) {
       const perGlyph = decisions[k]
-      if (perGlyph === null) continue
-      const perChar = Math.round(perGlyph * 100) / 100
-      if (perChar <= 0) continue
+      if (perGlyph === null || perGlyph <= 0) continue
       const boxes = shrinkTargets(lineModels[k], punctBoxesPerLine[k], candPunctBoxesPerLine[k])
-      for (const c of boxes) out.push({ from: c.from, ch: c.ch, perChar, baseLs })
+      const lineLastFrom = lines[k]![lines[k]!.length - 1]!.from
+      for (const c of boxes) {
+        const perChar = shrinkForGlyph(c.ch, perGlyph, c.width, c.from === lineLastFrom)
+        if (perChar === null || perChar <= 0) continue
+        out.push({ from: c.from, ch: c.ch, perChar: Math.round(perChar * 100) / 100, baseLs })
+      }
     }
     return out
   }

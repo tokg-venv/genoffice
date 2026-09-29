@@ -17,11 +17,13 @@ import {
 import type { PDFPage } from 'pdf-lib'
 import { VISUAL_SIGNATURE_CONTENT_PREFIX } from '../shared/ipc'
 import type {
+  AppliedDrawing,
   DrawingInput,
   FormValueInput,
   ImageEditFailure,
   MarkupInput,
   MetadataInput,
+  NoteEditFailure,
   NoteReplyTarget,
   SavePdfRequest,
   StaticFormFillRecord,
@@ -305,7 +307,12 @@ function findNoteAnnotRef(
 ): PDFRef | null {
   const annots = page.node.lookupMaybe(PDFName.of('Annots'), PDFArray)
   if (!annots) return null
-  const matches: PDFRef[] = []
+  /** exact /Contents matches (preferred) and NFC + whitespace-normalized matches
+      (fallback: the renderer's parsed text can differ from the file's by encoding
+      artifacts that decodeText round-trips unevenly) */
+  const exact: PDFRef[] = []
+  const normalized: PDFRef[] = []
+  const wanted = normalizeNoteText(target.contents)
   for (let i = 0; i < annots.size(); i++) {
     const ref = annots.get(i)
     if (!(ref instanceof PDFRef)) continue
@@ -322,22 +329,34 @@ function findNoteAnnotRef(
     const contents = dict.lookup(PDFName.of('Contents'))
     const text =
       contents instanceof PDFString || contents instanceof PDFHexString ? contents.decodeText() : ''
-    if (text !== target.contents) continue
-    if (ref.objectNumber === target.objNum) return ref
-    matches.push(ref)
+    if (text === target.contents) {
+      if (ref.objectNumber === target.objNum) return ref
+      exact.push(ref)
+    } else if (normalizeNoteText(text) === wanted) {
+      if (ref.objectNumber === target.objNum) return ref
+      normalized.push(ref)
+    }
   }
-  return matches[0] ?? null
+  return exact[0] ?? normalized[0] ?? null
 }
 
-/** Drawing annots: hand-written AP for Ink/Square/Circle/Line; notes are standard Text annots (viewer draws the icon) */
+/** Contents identity with encoding/whitespace noise folded away: NFC, every
+    whitespace run collapsed, edges trimmed */
+function normalizeNoteText(s: string): string {
+  return s.normalize('NFC').replace(/\s+/g, ' ').trim()
+}
+
+/** Drawing annots: hand-written AP for Ink/Square/Circle/Line; notes are standard Text annots (viewer draws the icon).
+    Returns the registered ref for note annotations (the caller reports it so the renderer can
+    retarget later edits at the written object), null for everything else. */
 function addDrawing(
   pdfDoc: PDFDocument,
   page: PDFPage,
   d: DrawingInput,
   /** localId → registered ref of notes written earlier in this request (reply parenting) */
   noteRefs?: Map<string, PDFRef>,
-): void {
-  if (d.kind === 'image') return // handled by addImageStamp (needs async embed)
+): PDFRef | null {
+  if (d.kind === 'image') return null // handled by addImageStamp (needs async embed)
   const [r, g, b] = d.color
 
   if (d.kind === 'note') {
@@ -370,7 +389,7 @@ function addDrawing(
     const ref = pdfDoc.context.register(annot)
     if (d.localId) noteRefs?.set(d.localId, ref)
     appendAnnot(pdfDoc, page, ref)
-    return
+    return ref
   }
 
   const ops: string[] = [`${num(d.width)} w 1 J 1 j ${r} ${g} ${b} RG`]
@@ -442,6 +461,7 @@ function addDrawing(
   annot.set(PDFName.of('T'), PDFHexString.fromText('GenOffice'))
   if (d.kind === 'ink') setVisualSignatureMetadata(annot, d.formFieldName)
   appendAnnot(pdfDoc, page, pdfDoc.context.register(annot))
+  return null
 }
 
 function applyFormValues(pdfDoc: PDFDocument, values: FormValueInput[]): void {
@@ -831,6 +851,11 @@ export interface SavePdfSkips {
   skippedTextEdits: TextEditFailure[]
   skippedTextInserts: TextInsertFailure[]
   skippedImageEdits: ImageEditFailure[]
+  /** note edits that matched no annotation (or whose page vanished); the renderer
+      keeps them pending instead of subtracting them from state */
+  skippedNoteEdits: NoteEditFailure[]
+  /** request.drawings indices written, with written note annotations' object numbers */
+  appliedDrawings: AppliedDrawing[]
 }
 
 /** Original page index → index in the saved file (after this request's deletions/reorder);
@@ -921,6 +946,10 @@ export interface AppliedSaveRequest {
   skippedTextInserts: TextInsertFailure[]
   /** Same, for content-stream image operations */
   skippedImageEdits: ImageEditFailure[]
+  /** Note edits that matched no annotation; the renderer keeps them pending */
+  skippedNoteEdits: NoteEditFailure[]
+  /** request.drawings indices written, with written note annotations' object numbers */
+  appliedDrawings: AppliedDrawing[]
 }
 
 /** Apply markups + form values + page ops, returning new bytes. Original objects are not reordered (pdf-lib keeps untouched objects). */
@@ -976,25 +1005,47 @@ export async function applySaveRequest(
     if (page && validMarkup(m)) addMarkup(pdfDoc, page, m)
   }
   const noteRefs = new Map<string, PDFRef>()
-  for (const d of request.drawings ?? []) {
+  /** request.drawings indices the main process actually wrote, with the object
+      number of written note annotations — the renderer subtracts exactly these
+      from its pending list instead of everything it sent (#1518-class silent
+      skips must keep the edit pending, not vanish) */
+  const appliedDrawings: AppliedDrawing[] = []
+  for (const [index, d] of (request.drawings ?? []).entries()) {
     const page = pages[d.pageIndex]
     if (!page) continue
-    if (d.kind === 'image') await addImageStamp(pdfDoc, page, d)
-    else addDrawing(pdfDoc, page, d, noteRefs)
+    if (d.kind === 'image') {
+      await addImageStamp(pdfDoc, page, d)
+      appliedDrawings.push({ index, objNum: null })
+    } else {
+      const ref = addDrawing(pdfDoc, page, d, noteRefs)
+      appliedDrawings.push({ index, objNum: ref?.objectNumber ?? null })
+    }
   }
   // Note content edits go after the drawings: replies added above locate their /IRT
   // parent by its old contents, which an earlier in-place rewrite would break. An
-  // unmatched edit is a silent no-op (same degradation as an unresolvable reply).
-  for (const e of request.noteEdits ?? []) {
+  // unmatched edit is reported as skipped — it used to be a silent no-op, and the
+  // renderer's unconditional subtraction then lost the user's text (#1518-class).
+  const skippedNoteEdits: NoteEditFailure[] = []
+  for (const [index, e] of (request.noteEdits ?? []).entries()) {
     const page = pages[e.pageIndex]
-    if (!page) continue
+    if (!page) {
+      skippedNoteEdits.push({ index, pageIndex: e.pageIndex, reason: 'page not in the saved file' })
+      continue
+    }
     const ref = findNoteAnnotRef(pdfDoc, page, {
       objNum: e.objNum,
       rect: e.rect,
       contents: e.oldContents,
     })
     const dict = ref ? pdfDoc.context.lookupMaybe(ref, PDFDict) : null
-    if (!dict) continue
+    if (!dict) {
+      skippedNoteEdits.push({
+        index,
+        pageIndex: e.pageIndex,
+        reason: 'no matching note annotation (rect + contents)',
+      })
+      continue
+    }
     dict.set(PDFName.of('Contents'), PDFHexString.fromText(e.contents))
     dict.set(PDFName.of('M'), PDFString.of(pdfDateString(Date.now())))
   }
@@ -1059,6 +1110,8 @@ export async function applySaveRequest(
       skippedTextEdits,
       skippedTextInserts,
       skippedImageEdits,
+      skippedNoteEdits,
+      appliedDrawings,
     }
   } catch (err) {
     // Form values beyond WinAnsi (e.g. CJK) make pdf-lib's appearance generation fail:
@@ -1070,6 +1123,8 @@ export async function applySaveRequest(
       skippedTextEdits,
       skippedTextInserts,
       skippedImageEdits,
+      skippedNoteEdits,
+      appliedDrawings,
     }
   }
 }

@@ -249,6 +249,7 @@ export const strings = {
     textBlockOverflow:
       '编辑后的段落放不下：多出的文字会盖住下方内容。请缩短文字，或按 Esc 放弃修改',
     textEditSkipped: '第 {pages} 页的部分文字修改无法应用，已跳过',
+    noteEditSkipped: '第 {pages} 页的部分便签修改无法保存，已保留为待存更改',
     removeMarkup: '点击选中此标注',
     deleteAnnotation: '删除标注',
     annotationDeleted: '已删除标注',
@@ -576,6 +577,8 @@ export const strings = {
     textBlockOverflow:
       'The edited paragraph no longer fits: the extra lines would cover the content below. Shorten the text, or press Esc to discard the change',
     textEditSkipped: 'Some text edits on page {pages} could not be applied and were skipped',
+    noteEditSkipped:
+      'Some note edits on page {pages} could not be saved and were kept as pending changes',
     removeMarkup: 'Click to select this annotation',
     deleteAnnotation: 'Delete annotation',
     annotationDeleted: 'Annotation deleted',
@@ -912,6 +915,8 @@ export const strings = {
       'Đoạn văn đã chỉnh sửa không còn vừa: các dòng thừa sẽ che mất nội dung bên dưới. Hãy rút ngắn văn bản hoặc nhấn Esc để hủy thay đổi',
     textEditSkipped:
       'Một số chỉnh sửa văn bản trên trang {pages} không thể áp dụng và đã bị bỏ qua',
+    noteEditSkipped:
+      'Một số chỉnh sửa ghi chú trên trang {pages} không thể lưu và đã được giữ lại dưới dạng thay đổi đang chờ',
     removeMarkup: 'Nhấp để chọn chú thích này',
     deleteAnnotation: 'Xóa chú thích',
     annotationDeleted: 'Đã xóa chú thích',
@@ -1250,6 +1255,8 @@ export const strings = {
     textBlockOverflow:
       '編集後の段落が収まりません：あふれた行が下の内容に重なってしまいます。文字を短くするか、Esc で変更を破棄してください',
     textEditSkipped: 'ページ {pages} の一部のテキスト編集は適用できず、スキップされました',
+    noteEditSkipped:
+      'ページ {pages} の一部の付箋編集は保存できず、未保存の変更として保持されました',
     removeMarkup: 'クリックでこの注釈を選択',
     deleteAnnotation: '注釈を削除',
     annotationDeleted: '注釈を削除しました',
@@ -1585,6 +1592,8 @@ export const strings = {
     textBlockOverflow:
       '편집한 단락이 공간에 들어가지 않습니다: 넘친 줄이 아래 내용을 덮게 됩니다. 텍스트를 줄이거나 Esc 키로 변경을 취소하세요',
     textEditSkipped: '{pages}페이지의 일부 텍스트 수정을 적용할 수 없어 건너뛰었습니다',
+    noteEditSkipped:
+      '{pages}페이지의 일부 메모 수정을 저장할 수 없어 보류 중인 변경 사항으로 유지되었습니다',
     removeMarkup: '클릭하여 이 주석 선택',
     deleteAnnotation: '주석 삭제',
     annotationDeleted: '주석을 삭제했습니다',
@@ -1921,6 +1930,8 @@ export const strings = {
       'Le paragraphe modifié ne tient plus : les lignes en trop recouvriraient le contenu en dessous. Raccourcissez le texte ou appuyez sur Échap pour abandonner la modification',
     textEditSkipped:
       "Certaines modifications de texte à la page {pages} n'ont pas pu être appliquées et ont été ignorées",
+    noteEditSkipped:
+      "Certaines modifications de note à la page {pages} n'ont pas pu être enregistrées et ont été conservées en attente",
     removeMarkup: 'Cliquer pour sélectionner cette annotation',
     deleteAnnotation: "Supprimer l'annotation",
     annotationDeleted: 'Annotation supprimée',
@@ -2264,6 +2275,8 @@ export const strings = {
       'Der bearbeitete Absatz passt nicht mehr: Die zusätzlichen Zeilen würden den Inhalt darunter überdecken. Kürzen Sie den Text oder verwerfen Sie die Änderung mit Esc',
     textEditSkipped:
       'Einige Textänderungen auf Seite {pages} konnten nicht übernommen werden und wurden übersprungen',
+    noteEditSkipped:
+      'Einige Notizänderungen auf Seite {pages} konnten nicht gespeichert werden und wurden als ausstehende Änderungen behalten',
     removeMarkup: 'Klicken, um diese Anmerkung auszuwählen',
     deleteAnnotation: 'Anmerkung löschen',
     annotationDeleted: 'Anmerkung gelöscht',
@@ -2604,6 +2617,8 @@ export const strings = {
       'El párrafo editado ya no cabe: las líneas sobrantes cubrirían el contenido de abajo. Acorta el texto o pulsa Esc para descartar el cambio',
     textEditSkipped:
       'Algunas ediciones de texto en la página {pages} no se pudieron aplicar y se omitieron',
+    noteEditSkipped:
+      'Algunas ediciones de notas en la página {pages} no se pudieron guardar y se mantuvieron como cambios pendientes',
     removeMarkup: 'Haz clic para seleccionar esta anotación',
     deleteAnnotation: 'Eliminar anotación',
     annotationDeleted: 'Anotación eliminada',
@@ -2944,6 +2959,8 @@ export const strings = {
     textBlockOverflow:
       'ย่อหน้าที่แก้ไขมีขนาดเกินพื้นที่เดิม: บรรทัดที่เกินจะทับเนื้อหาด้านล่าง โปรดย่อข้อความหรือกด Esc เพื่อยกเลิกการแก้ไข',
     textEditSkipped: 'การแก้ไขข้อความบางส่วนในหน้า {pages} ไม่สามารถนำไปใช้ได้และถูกข้าม',
+    noteEditSkipped:
+      'การแก้ไขโน้ตบางส่วนในหน้า {pages} บันทึกไม่สำเร็จและถูกเก็บไว้เป็นการเปลี่ยนแปลงที่รอดำเนินการ',
     removeMarkup: 'คลิกเพื่อเลือกคำอธิบายประกอบนี้',
     deleteAnnotation: 'ลบคำอธิบายประกอบ',
     annotationDeleted: 'ลบคำอธิบายประกอบแล้ว',
@@ -3279,6 +3296,8 @@ export const strings = {
       'Paragraf yang diedit tidak lagi muat: baris berlebih akan menutupi konten di bawahnya. Persingkat teks atau tekan Esc untuk membatalkan perubahan',
     textEditSkipped:
       'Beberapa suntingan teks di halaman {pages} tidak dapat diterapkan dan dilewati',
+    noteEditSkipped:
+      'Beberapa suntingan catatan di halaman {pages} tidak dapat disimpan dan disimpan sebagai perubahan yang tertunda',
     removeMarkup: 'Klik untuk memilih markah ini',
     deleteAnnotation: 'Hapus markah',
     annotationDeleted: 'Markah dihapus',
@@ -3617,6 +3636,8 @@ export const strings = {
       'Отредактированный абзац больше не помещается: лишние строки закроют содержимое ниже. Сократите текст или нажмите Esc, чтобы отменить изменение',
     textEditSkipped:
       'Некоторые правки текста на странице {pages} не удалось применить, они были пропущены',
+    noteEditSkipped:
+      'Некоторые правки заметок на странице {pages} не удалось сохранить, они сохранены как ожидающие изменения',
     removeMarkup: 'Нажмите, чтобы выбрать эту пометку',
     deleteAnnotation: 'Удалить пометку',
     annotationDeleted: 'Пометка удалена',
@@ -3955,6 +3976,8 @@ export const strings = {
     textBlockOverflow:
       'الفقرة المعدّلة لم تعد تتسع: الأسطر الزائدة ستغطي المحتوى أسفلها. اختصر النص أو اضغط Esc للتراجع عن التعديل',
     textEditSkipped: 'تعذّر تطبيق بعض تعديلات النص في الصفحة {pages} وتم تخطيها',
+    noteEditSkipped:
+      'تعذّر حفظ بعض تعديلات الملاحظات في الصفحة {pages} وتم الاحتفاظ بها كتغييرات معلقة',
     removeMarkup: 'انقر لتحديد هذا التعليق',
     deleteAnnotation: 'حذف التعليق',
     annotationDeleted: 'تم حذف التعليق',
@@ -4289,6 +4312,8 @@ export const strings = {
       'O parágrafo editado não cabe mais: as linhas excedentes cobririam o conteúdo abaixo. Encurte o texto ou pressione Esc para descartar a alteração',
     textEditSkipped:
       'Algumas edições de texto na página {pages} não puderam ser aplicadas e foram ignoradas',
+    noteEditSkipped:
+      'Algumas edições de notas na página {pages} não puderam ser guardadas e foram mantidas como alterações pendentes',
     removeMarkup: 'Clique para selecionar esta anotação',
     deleteAnnotation: 'Excluir anotação',
     annotationDeleted: 'Anotação excluída',
@@ -4629,6 +4654,8 @@ export const strings = {
       'Il paragrafo modificato non entra più: le righe in eccesso coprirebbero il contenuto sottostante. Accorcia il testo o premi Esc per annullare la modifica',
     textEditSkipped:
       'Alcune modifiche al testo a pagina {pages} non sono state applicate e sono state ignorate',
+    noteEditSkipped:
+      'Alcune modifiche alle note a pagina {pages} non sono state salvate e sono state mantenute come modifiche in sospeso',
     removeMarkup: 'Fai clic per selezionare questa annotazione',
     deleteAnnotation: 'Elimina annotazione',
     annotationDeleted: 'Annotazione eliminata',
@@ -4970,6 +4997,8 @@ export const strings = {
       'Zmieniony akapit już się nie mieści: nadmiarowe wiersze zakryłyby treść poniżej. Skróć tekst lub naciśnij Esc, aby odrzucić zmianę',
     textEditSkipped:
       'Niektórych zmian tekstu na stronie {pages} nie udało się zastosować i zostały pominięte',
+    noteEditSkipped:
+      'Niektórych zmian notatek na stronie {pages} nie udało się zapisać i zostały zachowane jako oczekujące zmiany',
     removeMarkup: 'Kliknij, aby zaznaczyć tę adnotację',
     deleteAnnotation: 'Usuń adnotację',
     annotationDeleted: 'Usunięto adnotację',
@@ -5308,6 +5337,8 @@ export const strings = {
     textBlockOverflow:
       'Upravený odstavec se již nevejde: přidané řádky by překryly obsah pod ním. Zkraťte text nebo stiskněte Esc pro zrušení změny',
     textEditSkipped: 'Některé úpravy textu na stránce {pages} nebylo možné použít a byly vynechány',
+    noteEditSkipped:
+      'Některé úpravy poznámek na stránce {pages} nebylo možné uložit a byly ponechány jako čekající změny',
     removeMarkup: 'Kliknutím vyberete tuto anotaci',
     deleteAnnotation: 'Odstranit anotaci',
     annotationDeleted: 'Anotace byla odstraněna',
@@ -5647,6 +5678,8 @@ export const strings = {
       'De bewerkte alinea past niet meer: de extra regels zouden de inhoud eronder bedekken. Kort de tekst in of druk op Esc om de wijziging te verwerpen',
     textEditSkipped:
       'Sommige tekstbewerkingen op pagina {pages} konden niet worden toegepast en zijn overgeslagen',
+    noteEditSkipped:
+      'Sommige notitiebewerkingen op pagina {pages} konden niet worden opgeslagen en zijn bewaard als wijzigingen in behandeling',
     removeMarkup: 'Klik om deze annotatie te selecteren',
     deleteAnnotation: 'Annotatie verwijderen',
     annotationDeleted: 'Annotatie verwijderd',
@@ -5985,6 +6018,8 @@ export const strings = {
       'Perenggan yang diedit tidak lagi muat: baris berlebihan akan menutupi kandungan di bawah. Pendekkan teks atau tekan Esc untuk membatalkan perubahan',
     textEditSkipped:
       'Beberapa suntingan teks di halaman {pages} tidak dapat digunakan dan dilangkau',
+    noteEditSkipped:
+      'Beberapa suntingan nota di halaman {pages} tidak dapat disimpan dan dikekalkan sebagai perubahan tertunda',
     removeMarkup: 'Klik untuk memilih anotasi ini',
     deleteAnnotation: 'Buang anotasi',
     annotationDeleted: 'Anotasi dibuang',
@@ -6322,6 +6357,7 @@ export const strings = {
     textBlockOverflow:
       'הפסקה שנערכה כבר אינה נכנסת: השורות העודפות יכסו את התוכן שמתחת. קצרו את הטקסט או הקישו Esc לביטול השינוי',
     textEditSkipped: 'חלק מעריכות הטקסט בעמוד {pages} לא הוחלו ודולגו',
+    noteEditSkipped: 'חלק מעריכות ההערות בעמוד {pages} לא נשמרו ונשמרו כשינויים ממתינים',
     removeMarkup: 'לחצו לבחירת הסימון הזה',
     deleteAnnotation: 'מחיקת הסימון',
     annotationDeleted: 'הסימון נמחק',
@@ -6651,6 +6687,8 @@ export const strings = {
     textBlockOverflow:
       'संपादित अनुच्छेद अब जगह में नहीं समाता: अतिरिक्त पंक्तियाँ नीचे की सामग्री को ढक देंगी। टेक्स्ट छोटा करें या बदलाव रद्द करने के लिए Esc दबाएँ',
     textEditSkipped: 'पृष्ठ {pages} के कुछ टेक्स्ट संपादन लागू नहीं हो सके और छोड़ दिए गए',
+    noteEditSkipped:
+      'पृष्ठ {pages} के कुछ नोट संपादन सहेजे नहीं जा सके और लंबित परिवर्तनों के रूप में रखे गए',
     removeMarkup: 'इस एनोटेशन को चुनने के लिए क्लिक करें',
     deleteAnnotation: 'एनोटेशन हटाएँ',
     annotationDeleted: 'एनोटेशन हटाया गया',
@@ -6986,6 +7024,7 @@ export const strings = {
     textBlockOverflow:
       '編輯後的段落放不下：多出的文字會蓋住下方內容。請縮短文字，或按 Esc 放棄修改',
     textEditSkipped: '第 {pages} 頁的部分文字修改無法套用，已略過',
+    noteEditSkipped: '第 {pages} 頁的部分便籤修改無法儲存，已保留為待存變更',
     removeMarkup: '點一下選取此標註',
     deleteAnnotation: '刪除標註',
     annotationDeleted: '已刪除標註',

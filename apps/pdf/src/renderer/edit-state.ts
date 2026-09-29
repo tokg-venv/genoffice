@@ -77,6 +77,14 @@ export interface SavedSnapshot {
       key; the post-save subtraction retargets it to what the file now says. */
   noteEditWritten: Map<number, string>
   drawingIds: Set<string>
+  /** Pending note drawings: id → /Contents this save wrote. A drawing the user
+      retyped while the write was in flight differs from its snapshot — the
+      post-save subtraction converts it into a pending edit of the written
+      annotation instead of discarding the newer text. */
+  drawingWritten: Map<string, string>
+  /** Pending note drawings: id → object number of the annotation this save wrote
+      (empty when the main process did not report applied drawings) */
+  drawingObjNum: Map<string, number>
   textEditIds: Set<string>
   textInsertIds: Set<string>
   imageEditIds: Set<string>

@@ -129,6 +129,7 @@ import type {
   ImageLayer,
   MarkupType,
   MetadataInput,
+  NoteEditFailure,
   NoteEditInput,
   PageImageRef,
   PdfConvertFormat,
@@ -281,6 +282,11 @@ const DRAW_TOOLS = [
   { tool: 'arrow' as const, icon: IconArrow, key: 'drawArrow' as const },
   { tool: 'note' as const, icon: IconNote, key: 'drawNote' as const },
 ]
+/** One-shot placement tools disarm the moment a placement lands. A tool left armed
+    keeps the scroll container in `pdf-drawing` mode — text selection off, the draw
+    layer intercepting clicks — so a follow-up highlight/underline click would
+    silently find no selection. Cancelled or failed placements keep the tool armed. */
+const DRAW_TOOLS_ONESHOT = new Set<string>(['ink', 'rect', 'ellipse', 'arrow', 'note'])
 
 // ── ribbon tabs (docs-style tab strip over a fixed 80px band) ──
 const RIBBON_TABS = [
@@ -1156,9 +1162,45 @@ export default function App() {
             return [{ ...e, annot: { ...e.annot, pageIndex: ni, contents } }]
           }),
         )
+        // A pending note the user retyped while its first write was in flight: the
+        // file now holds the snapshot text (which the reload renders), and dropping
+        // the drawing by id alone threw the newer text away. Convert it into a
+        // pending edit of the written annotation so the next save lands it — the
+        // same content guard the saved-note path already applies.
+        const convertedNoteEdits: LocalNoteEdit[] = []
         setDrawings((prev) =>
           prev.flatMap((dr) => {
-            if (saved.drawingIds.has(dr.id)) return []
+            if (saved.drawingIds.has(dr.id)) {
+              const written = saved.drawingWritten.get(dr.id)
+              const objNum = saved.drawingObjNum.get(dr.id)
+              const ni = remap.get(dr.input.pageIndex)
+              if (
+                dr.input.kind === 'note' &&
+                written !== undefined &&
+                objNum !== undefined &&
+                ni !== undefined &&
+                dr.input.contents !== written
+              ) {
+                // The writer's own rect math for a note at (x, y) — addDrawing in save-pdf.ts
+                const [x, y] = dr.input.at
+                convertedNoteEdits.push({
+                  id: newId(),
+                  annot: {
+                    pageIndex: ni,
+                    objNum,
+                    type: 'note',
+                    rect: [x, y - 18, x + 20, y],
+                    color: dr.input.color,
+                    author: dr.input.author ?? '',
+                    contents: written,
+                    timeMs: dr.input.createdMs ?? null,
+                    inReplyTo: null,
+                  },
+                  contents: dr.input.contents,
+                })
+              }
+              return []
+            }
             const ni = remap.get(dr.input.pageIndex)
             if (ni === undefined) return []
             return [
@@ -1166,6 +1208,9 @@ export default function App() {
             ]
           }),
         )
+        // Dispatched after setDrawings: React runs functional updaters in queue
+        // order, so `convertedNoteEdits` is populated by the time this runs
+        if (convertedNoteEdits.length > 0) setNoteEdits((prev) => [...prev, ...convertedNoteEdits])
         applyTextEdits((prev) =>
           prev.flatMap((te) => {
             if (saved.textEditIds.has(te.id)) return []
@@ -1210,6 +1255,15 @@ export default function App() {
           return ni === prev.origIdx && editId === prev.editId
             ? prev
             : { ...prev, origIdx: ni, editId }
+        })
+        // The pending note draft is anchored to a page the same way: follow the
+        // remap instead of leaving a ghost pin on a page that moved (or a draft
+        // pointing into a page the save removed)
+        setNoteDraft((prev) => {
+          if (!prev) return null
+          const ni = remap.get(prev.origIdx)
+          if (ni === undefined) return null
+          return ni === prev.origIdx ? prev : { ...prev, origIdx: ni }
         })
         // Config-style state: identity compare against the snapshot — unchanged means
         // it is in the file now, a new object means the user changed it during the save
@@ -3392,6 +3446,14 @@ export default function App() {
     showNotice(`${t('textInsertSkipped', { pages })}${skipDetail(skipped)}`)
   }
 
+  /** Unlike skipped text edits (dropped), skipped note edits stay pending and retry
+      on the next save — surface which pages did not take the edit instead of
+      silently succeeding while the margin keeps showing the unsaved text */
+  const noticeSkippedNoteEdits = (skipped: NoteEditFailure[]) => {
+    const pages = [...new Set(skipped.map((s) => s.pageIndex + 1))].sort((a, b) => a - b).join(', ')
+    showNotice(`${t('noteEditSkipped', { pages })}${skipDetail(skipped)}`)
+  }
+
   /** Pending edits in SavePdfRequest form; shared by in-place Save and Save As.
       `noteFlush` carries the drawings/noteEdits returned by commitNoteEdit — the
       state values in this closure predate that flush. */
@@ -3468,13 +3530,22 @@ export default function App() {
     // An explicit save opts this file into autosave
     if (!autosave) savedOnceRef.current = true
     // What this save writes — the post-save reload subtracts exactly this, keeping
-    // any edits the user makes while the write is in flight
+    // any edits the user makes while the write is in flight. `drawingWritten` keeps
+    // the text each pending note carried when sent: the main process reports which
+    // drawings it actually applied, and a note retyped mid-write is converted into
+    // a pending edit of the written annotation instead of vanishing with the reload.
     const snapshot: SavedSnapshot = {
       markupIds: new Set(markups.map((mk) => mk.id)),
       annotDeleteIds: new Set(annotDeletes.map((d) => d.id)),
       noteEditIds: new Set(noteFlush.noteEdits.map((e) => e.id)),
       noteEditWritten: new Map(noteFlush.noteEdits.map((e) => [e.annot.objNum, e.contents])),
       drawingIds: new Set(noteFlush.drawings.map((dr) => dr.id)),
+      drawingWritten: new Map(
+        noteFlush.drawings.flatMap((dr) =>
+          dr.input.kind === 'note' ? [[dr.id, dr.input.contents] as const] : [],
+        ),
+      ),
+      drawingObjNum: new Map(),
       textEditIds: new Set(edits.map((te) => te.id)),
       textInsertIds: new Set(textInserts.map((insert) => insert.id)),
       imageEditIds: new Set(imageEdits.map((ie) => ie.id)),
@@ -3501,6 +3572,38 @@ export default function App() {
       }
       if (result.skippedImageEdits && result.skippedImageEdits.length > 0) {
         noticeSkippedImages(result.skippedImageEdits)
+      }
+      // Narrow the snapshot to what the main process actually applied. The request
+      // arrays and the response indices share their order, so a skipped note edit
+      // keeps its pending entry (with a notice) instead of being subtracted — the
+      // subtraction used to trust "sent" as "written" and silently dropped the
+      // user's text when the main process could not match the annotation.
+      if (result.skippedNoteEdits && result.skippedNoteEdits.length > 0) {
+        const skipped = new Set(result.skippedNoteEdits.map((s) => s.index))
+        snapshot.noteEditIds = new Set(
+          noteFlush.noteEdits.filter((_, i) => !skipped.has(i)).map((e) => e.id),
+        )
+        snapshot.noteEditWritten = new Map(
+          noteFlush.noteEdits
+            .filter((_, i) => !skipped.has(i))
+            .map((e) => [e.annot.objNum, e.contents]),
+        )
+        inFlightNoteWritesRef.current = snapshot.noteEditWritten
+        noticeSkippedNoteEdits(result.skippedNoteEdits)
+      }
+      if (result.appliedDrawings) {
+        const sent = noteFlush.drawings
+        snapshot.drawingIds = new Set(
+          result.appliedDrawings.flatMap((a) => (sent[a.index] ? [sent[a.index]!.id] : [])),
+        )
+        snapshot.drawingObjNum = new Map(
+          result.appliedDrawings.flatMap((a) => {
+            const dr = sent[a.index]
+            return dr && a.objNum !== null && dr.input.kind === 'note'
+              ? [[dr.id, a.objNum] as const]
+              : []
+          }),
+        )
       }
       // Reload: changes are in the file now, canvas renders directly, saved pending ops are cleared
       try {
@@ -3774,7 +3877,8 @@ export default function App() {
   // ── Drawing annotations ──
 
   const commitDrawing = (origIdx: number, input: DrawingInput) => {
-    applyEditOps([{ op: 'addDrawing', drawing: { ...input, pageIndex: origIdx } }])
+    const plan = applyEditOps([{ op: 'addDrawing', drawing: { ...input, pageIndex: origIdx } }])
+    if (plan.failures.length === 0 && DRAW_TOOLS_ONESHOT.has(drawTool ?? '')) setDrawTool(null)
   }
 
   /** Render stamps in current page order; page numbers depend on visList, so both preview and save compute fresh */
@@ -4844,7 +4948,7 @@ export default function App() {
     setNoteDraft(null)
     if (!target || !text) return
     const id = newId()
-    applyEditOps([
+    const plan = applyEditOps([
       {
         op: 'addDrawing',
         id,
@@ -4859,6 +4963,9 @@ export default function App() {
         },
       },
     ])
+    // The note tool is one-shot: a successful placement disarms it. Left armed it
+    // would keep text selection disabled and the next highlight click silent.
+    if (plan.failures.length === 0) setDrawTool(null)
     setActiveNote({ origIdx: target.origIdx, rootKey: pendingNoteKey(id) })
   }
 
@@ -4969,15 +5076,20 @@ export default function App() {
     const unchanged = { drawings, noteEdits }
     const draft = noteEditDraft
     if (!draft) return unchanged
-    setNoteEditDraft(null)
     const item = noteThreadsOn(draft.origIdx)
       .flatMap((root) => flattenThread(root))
       .map(({ item: it }) => it)
       .find((it) => it.key === draft.itemKey)
     const ops = item ? noteEditOps(item, draft.text.trim()) : null
-    if (!ops) return unchanged
+    if (!ops) {
+      setNoteEditDraft(null)
+      return unchanged
+    }
     const plan = applyEditOps(ops)
+    // Clear the draft only once the ops actually committed: clearing before the
+    // failure check threw away the box's text on a validation failure
     if (plan.failures.length > 0) return unchanged
+    setNoteEditDraft(null)
     return { drawings: drawingsRef.current, noteEdits: noteEditsRef.current }
   }
 
