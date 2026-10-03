@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Markdown } from '@genoffice/ui'
-import { HELP_GROUPS, HELP_TOPICS, helpBody, searchTopics } from './help-registry'
+import { HELP_GROUPS, HELP_TOPICS, helpBody, helpImage, searchTopics } from './help-registry'
 
 /**
  * The in-app manual (issue #1520): sidebar topic list with full-text search
@@ -152,6 +152,7 @@ export function HelpScreen(): React.ReactElement {
             {body !== null ? (
               <Markdown
                 text={body}
+                images={{ resolve: helpImage }}
                 nav={{
                   scheme: 'help://',
                   onNavigate: (href) => {

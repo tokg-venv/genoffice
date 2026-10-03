@@ -17,6 +17,11 @@ export interface MarkdownNav {
   onNavigate: (href: string) => void
 }
 
+export interface MarkdownImage {
+  /** Resolve an image href from `![alt](href)`; return undefined to skip the image */
+  resolve?: (href: string) => string | undefined
+}
+
 // Hrefs may carry one level of balanced parens (sheet names like `Data (2)`
 // arrive as sheetnav://Data%20(2)!B2), so the href cannot simply stop at ')'.
 const HREF = /(?:[^\s()]|\([^\s()]*\))+/.source
@@ -72,6 +77,7 @@ type MdBlock =
   | { kind: 'h'; text: string }
   | { kind: 'table'; align: CellAlign[]; head: string[]; rows: string[][] }
   | { kind: 'code'; lines: string[] }
+  | { kind: 'img'; alt: string; href: string }
 
 const FENCE_RE = /^\s*(`{3,}|~{3,})/
 const DELIM_CELL_RE = /^\s*:?-+:?\s*$/
@@ -136,6 +142,14 @@ function parseBlocks(text: string): MdBlock[] {
       flush()
       continue
     }
+    // Standalone image line: ![alt](href) — rendered as an <img> when the host
+    // passes images.resolve and it resolves, otherwise ignored
+    const img = new RegExp(`^!\\[([^\\]]*)\\]\\((${HREF})\\)$`).exec(line)
+    if (img) {
+      flush()
+      blocks.push({ kind: 'img', alt: img[1] ?? '', href: img[2] ?? '' })
+      continue
+    }
     if (FENCE_RE.test(line)) {
       flush()
       cur = { kind: 'code', lines: [] }
@@ -197,7 +211,15 @@ function parseBlocks(text: string): MdBlock[] {
   return blocks
 }
 
-export function Markdown({ text, nav }: { text: string; nav?: MarkdownNav }): React.JSX.Element {
+export function Markdown({
+  text,
+  nav,
+  images,
+}: {
+  text: string
+  nav?: MarkdownNav
+  images?: MarkdownImage
+}): React.JSX.Element {
   return (
     <div className="ai-md">
       {parseBlocks(text).map((b, i) => {
@@ -207,6 +229,11 @@ export function Markdown({ text, nav }: { text: string; nav?: MarkdownNav }): Re
               {renderInline(b.text, nav)}
             </p>
           )
+        }
+        if (b.kind === 'img') {
+          const src = images?.resolve?.(b.href)
+          if (!src) return null
+          return <img key={i} className="ai-md-img" src={src} alt={b.alt} loading="lazy" />
         }
         if (b.kind === 'ul' || b.kind === 'ol') {
           const items = b.items.map((it, j) => <li key={j}>{renderInline(it, nav)}</li>)

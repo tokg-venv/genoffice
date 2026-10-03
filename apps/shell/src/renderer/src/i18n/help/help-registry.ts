@@ -278,6 +278,18 @@ const bodies = import.meta.glob<string>('./topics/*.md', {
   eager: true,
 })
 
+/** screenshots referenced from topic bodies as ![alt](img/<name>.png) */
+const images = import.meta.glob<string>('./topics/img/*.png', {
+  query: '?url',
+  import: 'default',
+  eager: true,
+})
+
+/** Bundled asset URL for a topic image href, or undefined when absent */
+export function helpImage(href: string): string | undefined {
+  return images[`./topics/${href.replace(/^\.\//, '')}`]
+}
+
 export function helpBody(id: string, lang: string): string | null {
   const short = lang.startsWith('zh') ? 'zh' : 'en'
   const direct = bodies[`./topics/${id}.${short}.md`]

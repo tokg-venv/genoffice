@@ -21,6 +21,12 @@ Sheets is the Excel-like editor; calculation runs in a separate Rust engine proc
 - **View**: gridlines & headings toggles, zoom, Normal / page-break preview.
 - **Chart Design**: appears with a chart selected — chart type, styles and colors, edit the data range.
 
+The Data and Formulas tabs in place:
+
+![The Data tab](img/sheets-data.en.png)
+
+![The Formulas tab](img/sheets-formulas.en.png)
+
 ## Numbers and formatting
 
 - Number formats: general, number, currency, percent, date/time, fraction, scientific and more.
@@ -28,6 +34,13 @@ Sheets is the Excel-like editor; calculation runs in a separate Rust engine proc
 - Row heights and column widths by dragging; double-click a boundary to auto-fit.
 
 ## Data
+
+**Sort & filter** (descending by one column, for example):
+
+1. Click **any cell in that column** (no need to select the whole column).
+2. Home tab ▸ **Sort & Filter** ▸ **Descending**; whole rows reorder together (the area sorts as one).
+3. For custom rules (multiple columns, by color): the same path, **Custom Sort**.
+4. Filter: select the header row and click **Sort & Filter ▸ Filter** — each header gets a ▼ dropdown where you check the values to keep; clear the filter to bring everything back.
 
 - Sort and filter.
 - Frozen panes.

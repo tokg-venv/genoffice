@@ -13,6 +13,8 @@ The Markdown editor opens .md / .markdown with a source + rendered-preview exper
 
 One row of buttons above the editor (hover for tooltips):
 
+![The Markdown toolbar](img/md-toolbar.en.png)
+
 - **File & history**: Save, Save As, Undo, Redo, Find; the **AutoSave** toggle on the right writes changes to disk on a timer.
 - **AI button**: opens the AI panel; next to it are the rewrite / extend / translate presets.
 - **Paragraph style** (dropdown): switch between body text and heading levels.
@@ -22,3 +24,9 @@ One row of buttons above the editor (hover for tooltips):
 - **Properties**: insert or jump to the YAML front matter block at the top of the file.
 - **Outline**: jump by heading hierarchy.
 - **Spellcheck**: toggle spellcheck for this document.
+
+Three quick examples:
+
+- **Heading**: put the cursor on the line ▸ paragraph-style dropdown ▸ "Heading 1".
+- **Table**: click **Insert table** ▸ drag the row/column count ▸ type into the cells; the preview renders it immediately.
+- **Task list**: select a few lines ▸ click **Task list** ▸ each line becomes `- [ ]`, rendered as checkboxes in the preview.
