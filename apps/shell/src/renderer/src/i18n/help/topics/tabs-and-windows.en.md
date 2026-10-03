@@ -29,6 +29,15 @@ Right-click a tab for: new tab, close, close others, close to the right, duplica
 
 When tabs overflow, the ▾ at the right end of the strip opens the full list (a native menu, never covered by the content area); pick with the arrow keys.
 
+## The toolbar row inside every editor
+
+Each editor tab has a toolbar row at the top (exact layout varies a little per editor):
+
+- **Save** (⌘S/ctrl+S) and **Save As**.
+- **Undo / Redo**: multi-level; each editor keeps its own history.
+- **Find** (ctrl+F): opens that editor's find panel.
+- **AutoSave** toggle: when on, changes are written to disk on a timer; when off, only manual saves write (the unsaved marker on the tab/title reminds you).
+
 ## The Home tab
 
 The leftmost Home tab cannot be closed; to get back from any editor, click it or use File ▸ Home.

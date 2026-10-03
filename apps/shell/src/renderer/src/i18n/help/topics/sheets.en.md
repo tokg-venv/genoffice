@@ -4,11 +4,22 @@ Sheets is the Excel-like editor; calculation runs in a separate Rust engine proc
 
 ## The interface
 
-- **Ribbon**: the Home tab groups font, fill, borders, number formats, alignment, row/column and sheet operations.
+- **Ribbon**: eight tabs, listed one by one below.
 - **Formula bar**: shows and edits the active cell's formula; common functions supported.
 - **Sheet tabs** (bottom): add / rename / delete / move sheets.
 - **Cell editing**: double-click or just type; Enter confirms and moves down, Tab moves right, Escape cancels (Excel habits).
 - **Shortcuts**: aligned with the Excel family (ctrl+C/V/X, ctrl+Z/Y, ctrl+F, ...).
+
+## Ribbon tabs
+
+- **Home**: font, fill, borders, number formats (currency/percent/thousands, decimal up/down), alignment, merge, row/column insert and size, conditional formatting, format-as-table, cell styles, clipboard & format painter, sort & filter.
+- **Insert**: shapes, icons, symbols, equation, screenshot and more.
+- **Page Layout**: theme colors & fonts, print gridlines/headings toggles, page-break preview.
+- **Formulas**: AutoSum and function insert, define names (also from selection), trace precedents/dependents, the Watch Window, recalculate sheet/workbook.
+- **Data**: sort & filter (incl. advanced filter, clear filter), text-to-columns, merge workbooks, refresh all.
+- **Review**: browse comments (show, previous/next), translate.
+- **View**: gridlines & headings toggles, zoom, Normal / page-break preview.
+- **Chart Design**: appears with a chart selected — chart type, styles and colors, edit the data range.
 
 ## Numbers and formatting
 

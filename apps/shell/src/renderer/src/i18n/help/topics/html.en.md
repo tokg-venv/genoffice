@@ -7,3 +7,13 @@ The HTML editor opens .html / .htm with two modes: **preview** (the rendered pag
 - **Source mode**: edit the HTML; ctrl+F find, Replace All saves the rewritten markup.
 - **Saving**: byte-faithful (BOM/CRLF/trailing newline preserved); unmodified saves do not rewrite.
 - **Zoom**: ctrl+wheel / pinch scales the preview; ctrl+Z inside the preview undoes the last edit.
+
+## The toolbar
+
+- **File & history**: Save, Save As, Undo, Redo, Find; the **AutoSave** toggle writes changes on a timer.
+- **Preview / Source** switch; **Present** shows the page full-screen.
+- **Formatting**: bold, italic, font size up/down; the **style panel** for the selected element (colors and more).
+- **Insert**: heading, paragraph, table, image (by link), more.
+- **Image actions** (with an image selected): crop, **remove background**, replace, lock aspect ratio.
+- **Element actions** (with an element selected in the preview inspector): delete, duplicate, move up/down.
+- **AI button**: opens the AI panel; ask about the selected element directly.
