@@ -6,7 +6,11 @@ import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-doc
 import { blocksToPmDoc } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { DocRedaction } from '../src/renderer/editor/redaction'
-import { dialogNameFor, noteDocumentSwapped, suggestedSaveAsName } from '../src/renderer/file-actions'
+import {
+  dialogNameFor,
+  noteDocumentSwapped,
+  suggestedSaveAsName,
+} from '../src/renderer/file-actions'
 import type { FileActionContext } from '../src/renderer/file-actions'
 
 /**
@@ -121,7 +125,6 @@ function ctxFor(opened: Opened, fileName: string): FileActionContext {
     setSectionDirty: () => {},
   } as unknown as FileActionContext
 }
-
 
 beforeEach(() => {
   sent = []

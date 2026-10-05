@@ -4,11 +4,7 @@ import type { WorkbookSnapshot } from '@genoffice/xlsx-gateway/domain/workbook.t
 import type { SheetRedactionState } from '@genoffice/xlsx-gateway/gateway/xlsx-redaction'
 import { buildRedactionIndex, NO_REDACTIONS } from '../src/renderer/ai/redact'
 import type { WorkbookReadContext } from '../src/renderer/ai/workbook-readers'
-import {
-  firstSaveName,
-  modelSaveAsName,
-  noteDocumentSwapped,
-} from '../src/renderer/file-naming'
+import { firstSaveName, modelSaveAsName, noteDocumentSwapped } from '../src/renderer/file-naming'
 
 /**
  * These go through the naming functions the save path and the ribbon actually
@@ -80,9 +76,11 @@ let namingEnabled = true
  * borrowed from jsdom.
  */
 function installBridge(api: {
-  suggestFileName: (
-    input: { content: string; trigger: string; filePath?: string | null },
-  ) => Promise<unknown>
+  suggestFileName: (input: {
+    content: string
+    trigger: string
+    filePath?: string | null
+  }) => Promise<unknown>
   getFileNamingEnabled: () => Promise<boolean>
 }): void {
   vi.stubGlobal('window', { aiOffice: api })

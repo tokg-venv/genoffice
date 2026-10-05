@@ -116,5 +116,4 @@ describe('File ▸ the manual naming trigger', () => {
     })
     expect(onNameWithAi).not.toHaveBeenCalled()
   })
-
 })

@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { buildParseMap } from '../src/renderer/document/parse-map'
-import {
-  firstSaveName,
-  modelSaveAsName,
-  noteDocumentSwapped,
-} from '../src/renderer/file-naming'
+import { firstSaveName, modelSaveAsName, noteDocumentSwapped } from '../src/renderer/file-naming'
 
 /**
  * These go through the naming functions the save path and the ribbon actually
@@ -39,9 +35,11 @@ let namingEnabled = true
  * rather than replacing it, so the jsdom DOM other code reads stays intact.
  */
 function installBridge(api: {
-  suggestFileName: (
-    input: { content: string; trigger: string; filePath?: string | null },
-  ) => Promise<unknown>
+  suggestFileName: (input: {
+    content: string
+    trigger: string
+    filePath?: string | null
+  }) => Promise<unknown>
   getFileNamingEnabled: () => Promise<boolean>
 }): void {
   ;(window as unknown as { aiOffice: unknown }).aiOffice = api
@@ -90,7 +88,8 @@ describe('the first-save name is derived from the projected text', () => {
   })
 
   it('sends the whole page for one with nothing withheld', async () => {
-    const plain = '<html><head><title>Notes</title></head><body><p>the build is green</p></body></html>'
+    const plain =
+      '<html><head><title>Notes</title></head><body><p>the build is green</p></body></html>'
     await firstSaveName(plain, buildParseMap(plain, 1), null)
     expect(sent[0]!.content).toContain('the build is green')
     expect(sent[0]!.content).toContain('Notes')
