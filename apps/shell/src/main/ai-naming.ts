@@ -118,3 +118,18 @@ export function excerptForNaming(content: string, limit = 4000): string {
 export function hasNameableContent(content: string): boolean {
   return content.replace(/[\s#*_\-`~>|[\](){}]/g, '').length > 0
 }
+
+/**
+ * The key this preference lives under in `app-settings.json`, alongside the
+ * shell's other preferences and spelled like them.
+ *
+ * Reader and writer both reach for this constant, because `readAppSettings` is
+ * typed `Record<string, unknown>`: a key that does not match is not a type
+ * error, it is a preference that writes fine and then always reads back off.
+ */
+export const FILE_NAMING_PREF_KEY = 'aiAutoFileNaming'
+
+/** Whether first-save naming is switched on. Only a real `true` counts. */
+export function fileNamingPrefOn(settings: Record<string, unknown>): boolean {
+  return settings[FILE_NAMING_PREF_KEY] === true
+}

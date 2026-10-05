@@ -3,8 +3,15 @@ import { join } from 'node:path'
 import type { AgentMessage } from '@genoffice/agent-core'
 import type { AiProviderConfig, AiProviderId } from '@genoffice/ai-provider'
 import { streamForProvider } from '@genoffice/ai-provider'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { buildNamingInstruction, excerptForNaming, sanitizeFileStem } from './ai-naming'
+import { readFileSync } from 'node:fs'
+import { writeAppSetting, readAppSettings } from './app-settings'
+import {
+  buildNamingInstruction,
+  excerptForNaming,
+  fileNamingPrefOn,
+  FILE_NAMING_PREF_KEY,
+  sanitizeFileStem,
+} from './ai-naming'
 import { decideNaming, type NamingTrigger } from './naming-policy'
 
 /** Channel the renderer's naming button and the save path both call. */
@@ -16,7 +23,7 @@ export const AI_NAMING_CHANNELS = {
   setEnabled: 'ai:set-file-naming',
 } as const
 
-const PREF_KEY = 'ai.autoFileNaming'
+const PREF_PATH = () => join(app.getPath('userData'), 'app-settings.json')
 
 /** The provider ids this build knows; anything else in the file is ignored. */
 const PROVIDER_IDS: readonly AiProviderId[] = ['genspark', 'codex', 'anthropic']
@@ -123,17 +130,11 @@ export function registerAiNamingIpc(lang: () => string, enabled: () => boolean):
   ipcMain.handle(AI_NAMING_CHANNELS.getEnabled, (): boolean => enabled())
   ipcMain.handle(AI_NAMING_CHANNELS.setEnabled, (_event, on: unknown): boolean => {
     if (typeof on !== 'boolean') return enabled()
-    // merge into app-settings.json, where the shell's other preferences live,
-    // rather than inventing a second store. `enabled()` reads the same file, so
-    // there is no in-memory copy to keep in step with it.
-    const path = join(app.getPath('userData'), 'app-settings.json')
+    // the shell's own settings writer: an atomic replace of one key in the
+    // same file every other preference lives in, so a reader that looks for
+    // the wrong key here is a reader that always finds nothing
     try {
-      const current: unknown = JSON.parse(readFileSync(path, 'utf8'))
-      const base =
-        current && typeof current === 'object' && !Array.isArray(current)
-          ? (current as Record<string, unknown>)
-          : {}
-      writeFileSync(path, JSON.stringify({ ...base, [PREF_KEY]: on }, null, 2), 'utf8')
+      writeAppSetting(PREF_PATH(), FILE_NAMING_PREF_KEY, on)
     } catch (err) {
       // the in-memory value still applies this session; the next launch just
       // asks again, which is better than refusing the toggle
@@ -141,4 +142,15 @@ export function registerAiNamingIpc(lang: () => string, enabled: () => boolean):
     }
     return on
   })
+}
+
+/**
+ * Whether first-save naming is switched on, as stored.
+ *
+ * Exported next to the writer so the two cannot read different keys — which is
+ * not a type error here, only a preference that saves and then always comes
+ * back off.
+ */
+export function readFileNamingPref(): boolean {
+  return fileNamingPrefOn(readAppSettings(PREF_PATH()))
 }
