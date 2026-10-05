@@ -171,6 +171,12 @@ import {
 import { isExternallyModified, type DiskFileState } from './external-change'
 import { copyImageDisplaySize, validCopyImageDataUrl } from './copy-image-guard'
 import { printScaleOption, validPrintGeometry } from './print-args'
+import {
+  docsFontStoreFaces,
+  docsFontStoreFamilies,
+  downloadDocsFontFamily,
+  listDocsFontCatalog,
+} from './docs-fonts'
 import { initDocsAutoUpdater } from './updater'
 import { registerZoteroIpc, teardownZoteroIpc } from './zotero-ipc'
 
@@ -4281,6 +4287,26 @@ export function registerDocsIpc(): void {
   ipcMain.handle('docs:font-metrics', (_event, family: string) =>
     typeof family === 'string' ? familyVerticalMetrics(family) : null,
   )
+
+  // Downloadable OFL families. The catalog is [] unless this build ships a font
+  // mirror, which is what keeps the picker's download section hidden by default;
+  // see main/docs-fonts.ts for what "installed" means on this side.
+  ipcMain.handle('docs:font-catalog', () => listDocsFontCatalog())
+  ipcMain.handle('docs:font-download', async (_event, family: string) => {
+    if (typeof family !== 'string') return { ok: false, error: 'family must be a string' }
+    try {
+      await downloadDocsFontFamily(family)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+  // the renderer has no file access of its own: the stored cuts come over IPC
+  // and become FontFaces there (renderer/store-fonts.ts)
+  ipcMain.handle('docs:font-store-faces', (_event, family: string) =>
+    typeof family === 'string' ? docsFontStoreFaces(family) : null,
+  )
+  ipcMain.handle('docs:font-store-families', () => docsFontStoreFamilies())
 
   ipcMain.handle('docs:open', async (event) => {
     const result = await openDialog(event, {

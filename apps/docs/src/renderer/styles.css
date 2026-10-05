@@ -10955,6 +10955,61 @@ ruby.doc-ruby rt {
   margin-top: 0;
 }
 
+/* Downloadable families, as their own list below the pickers rather than as
+   dropdown entries: these rows cost megabytes, which a font menu has no room to
+   say and no affordance to preview. */
+.font-download {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.font-download-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.font-download-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.font-download-row:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.font-download-row:disabled {
+  cursor: default;
+  color: var(--text-dim);
+}
+
+.font-download-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.font-download-meta {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 .font-preview {
   margin: 4px 0 14px;
   padding: 14px 10px;

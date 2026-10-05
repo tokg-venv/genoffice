@@ -33,6 +33,27 @@ export interface PickImageResult {
   name: string
 }
 
+// ---- downloadable font store (catalog + store logic in @genoffice/electron-utils) ----
+
+/** One offerable family, as the main process reports it. Mirrors FontCatalogRow
+ *  in @genoffice/ui, redeclared plain so this file stays free of React imports —
+ *  the main process loads it too. */
+export interface DocsFontCatalogRow {
+  family: string
+  script: 'latin' | 'ja' | 'ko' | 'sc' | 'tc'
+  /** SPDX id, shown next to the size so the reader sees the terms before fetching */
+  license: string
+  installed: boolean
+  /** total download size */
+  bytes: number
+}
+
+/** One stored cut of a family, ready to become a FontFace in the renderer. */
+export interface DocsFontFace {
+  style: 'regular' | 'bold' | 'italic' | 'boldItalic'
+  bytes: Uint8Array
+}
+
 // ---- AI provider settings/config/streaming: canonical types live in @genoffice/ai-provider ----
 
 import type {
@@ -429,6 +450,31 @@ export interface DesktopApi {
   pickImage(): Promise<PickImageResult | null>
   /** vertical metrics of an installed family (exact name match), null when missing */
   fontMetrics(family: string): Promise<FaceVerticalMetrics | null>
+  /**
+   * Downloadable OFL families this build ships a mirror for, with what each
+   * would cost. Empty (not an error) when the build ships no mirror — the
+   * picker shows no download section at all in that case.
+   *
+   * `installed` is the store's half of the answer only: the files are on disk.
+   * A family the reader already has as a system font is folded in by the
+   * renderer, which is the side that can ask.
+   */
+  fontCatalog(): Promise<DocsFontCatalogRow[]>
+  /** fetch and verify one family into the store; ok=false carries the reason */
+  fontDownload(family: string): Promise<{ ok: boolean; error?: string }>
+  /**
+   * The stored cuts of a family, for the renderer to register as FontFaces.
+   * Null when the family is not fully in the store, so a half-fetched family
+   * registers nothing rather than one weight with silent fallbacks.
+   */
+  fontStoreFaces(family: string): Promise<DocsFontFace[] | null>
+  /**
+   * Catalog families whose cuts are all in the store, so the renderer can
+   * re-register them at startup. Reported from the store dir rather than from
+   * `fontCatalog`, so fonts downloaded in an earlier session survive a build
+   * that ships no mirror.
+   */
+  fontStoreFamilies(): Promise<string[]>
   getAiSettings(): Promise<AiSettings>
   setAiSettings(settings: AiSettings): Promise<void>
   /** system print dialog for the current window; ok=false without error = canceled.

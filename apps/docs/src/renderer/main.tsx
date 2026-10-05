@@ -16,6 +16,7 @@ import './styles.css'
 import './fonts/fonts.css'
 import { applyAiPanelPrefs, installScreenTips } from '@genoffice/ui'
 import { setAltChunkHtmlConverter } from '@genoffice/docx-engine'
+import { registerStoredFamilies } from './store-fonts'
 
 installScreenTips()
 if (window.desktop?.convertAltChunkHtml) {
@@ -49,6 +50,13 @@ async function bootstrap(): Promise<void> {
     .then(applyAiPanelPrefs)
     .catch(() => {})
   window.desktop?.onAiPanelPrefsChanged?.(applyAiPanelPrefs)
+  // Families downloaded in an earlier session are files on disk and nothing
+  // else: this window has to register them as faces before they render, or a
+  // document already using one falls back until something forces a repaint.
+  // Deliberately not awaited — a 28 MiB family must not hold up first paint, and
+  // each registration dispatches `loadingdone`, so whatever measured in the
+  // meantime re-measures itself once the faces land.
+  void registerStoredFamilies()
   createRoot(document.getElementById('root')!).render(
     <LocaleProvider initial={lang}>
       <App />

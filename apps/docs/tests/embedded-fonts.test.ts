@@ -4,7 +4,7 @@ import { adoptEmbeddedFonts } from '../src/renderer/embedded-fonts'
 
 const setEmbeddedLineMetrics = vi.fn()
 vi.mock('../src/renderer/line-metrics', () => ({
-  noteEmbeddedFontsChanged: () => {},
+  noteFontFacesChanged: () => {},
   setEmbeddedLineMetrics: (faces: unknown) => setEmbeddedLineMetrics(faces),
 }))
 

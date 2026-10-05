@@ -1,10 +1,18 @@
 import type { EmbeddedFont, EmbeddedFontLineMetrics } from '@genoffice/docx-engine'
-import { noteEmbeddedFontsChanged, setEmbeddedLineMetrics } from './line-metrics'
+import { noteFontFacesChanged, setEmbeddedLineMetrics } from './line-metrics'
 
 let active: FontFace[] = []
 let generation = 0
 
-function sfntBuffer(data: Uint8Array): ArrayBuffer {
+/**
+ * A Uint8Array view as the standalone ArrayBuffer FontFace wants.
+ *
+ * A view onto a larger buffer (an IPC receive, a mmap'd file) must be copied:
+ * handing FontFace the whole backing store registers whatever else lives in it.
+ * Exported because the downloadable store builds faces from the same kind of
+ * bytes and the offset trap is not worth writing twice.
+ */
+export function sfntBuffer(data: Uint8Array): ArrayBuffer {
   const whole = data.byteOffset === 0 && data.byteLength === data.buffer.byteLength
   return (whole ? data.buffer : data.slice().buffer) as ArrayBuffer
 }
@@ -51,7 +59,7 @@ export async function adoptEmbeddedFonts(
   // the regular cut's box stands for the family
   setEmbeddedLineMetrics(boxes.sort((a, b) => Number(a.styled) - Number(b.styled)))
   if (revoked.length === 0 && active.length === 0) return true
-  noteEmbeddedFontsChanged([...revoked, ...active].map((f) => f.family))
+  noteFontFacesChanged([...revoked, ...active].map((f) => f.family))
   // buffer-backed faces parse synchronously: the set never enters 'loading', so
   // the measurement caches keyed on 'loadingdone' must be told by hand
   document.fonts.dispatchEvent(new Event('loadingdone'))

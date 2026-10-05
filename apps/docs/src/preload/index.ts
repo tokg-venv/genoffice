@@ -136,6 +136,10 @@ const api: DesktopApi = {
   getRecentFiles: () => ipcRenderer.invoke('docs:recent'),
   pickImage: () => ipcRenderer.invoke('docs:pick-image'),
   fontMetrics: (family: string) => ipcRenderer.invoke('docs:font-metrics', family),
+  fontCatalog: () => ipcRenderer.invoke('docs:font-catalog'),
+  fontDownload: (family: string) => ipcRenderer.invoke('docs:font-download', family),
+  fontStoreFaces: (family: string) => ipcRenderer.invoke('docs:font-store-faces', family),
+  fontStoreFamilies: () => ipcRenderer.invoke('docs:font-store-families'),
   print: (scale?: number) => ipcRenderer.invoke('docs:print', scale),
   exportPdf: (
     defaultName: string,
