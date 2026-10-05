@@ -681,6 +681,7 @@ export const cs = {
   appExportPdfTitle: 'Exportovat do PDF',
   appSaveTitle: 'Uložit (⌘S)',
   appSaveAs: 'Uložit jako',
+  aiNameFile: 'Pojmenovat pomocí AI…',
   appUndo: 'Zpět',
   appRedo: 'Znovu',
   appUnsavedEditOne: '● {count} neuložená úprava',
