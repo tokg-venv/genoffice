@@ -26,7 +26,7 @@ import {
 } from 'electron'
 import type { MenuItemConstructorOptions, NativeImage, WebContents } from 'electron'
 import { atomicCopyFile, atomicWriteFile } from './atomic-write'
-import { initAiNamingPreference, registerAiNamingIpc } from './ai-naming-service'
+import { registerAiNamingIpc } from './ai-naming-service'
 import { tabStripOverlay } from './title-bar-overlay'
 import menuDocxIcon1x from './assets/menu-docx.png?asset'
 import menuDocxIcon2x from './assets/menu-docx@2x.png?asset'
@@ -5593,7 +5593,6 @@ registerAiIpc()
 // Model file naming (first save, or a manual ask). Registered here beside the
 // other AI wiring so every window type can reach it; the preference is seeded
 // from app-settings.json first so the first toggle press is not a lie.
-initAiNamingPreference(readAppSettings(APP_SETTINGS_PATH()).aiAutoFileNaming === true)
 registerAiNamingIpc(
   () => currentLang(),
   () => readAppSettings(APP_SETTINGS_PATH()).aiAutoFileNaming === true,

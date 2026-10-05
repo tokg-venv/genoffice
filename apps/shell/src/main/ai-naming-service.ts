@@ -123,9 +123,9 @@ export function registerAiNamingIpc(lang: () => string, enabled: () => boolean):
   ipcMain.handle(AI_NAMING_CHANNELS.getEnabled, (): boolean => enabled())
   ipcMain.handle(AI_NAMING_CHANNELS.setEnabled, (_event, on: unknown): boolean => {
     if (typeof on !== 'boolean') return enabled()
-    enabledCache = on
     // merge into app-settings.json, where the shell's other preferences live,
-    // rather than inventing a second store
+    // rather than inventing a second store. `enabled()` reads the same file, so
+    // there is no in-memory copy to keep in step with it.
     const path = join(app.getPath('userData'), 'app-settings.json')
     try {
       const current: unknown = JSON.parse(readFileSync(path, 'utf8'))
@@ -141,10 +141,4 @@ export function registerAiNamingIpc(lang: () => string, enabled: () => boolean):
     }
     return on
   })
-}
-
-let enabledCache = false
-/** set by the shell at startup from persisted settings */
-export function initAiNamingPreference(initial: boolean): void {
-  enabledCache = initial
 }
