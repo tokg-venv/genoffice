@@ -65,6 +65,7 @@ export const id = {
   ribbonOpen: 'Buka…',
   ribbonSave: 'Simpan',
   ribbonSaveAs: 'Simpan Sebagai…',
+  ribbonNameWithAi: 'Beri nama dengan AI…',
   ribbonPaste: 'Tempel',
   ribbonCutTip: 'Potong (⌘X)',
   ribbonCopyTip: 'Salin (⌘C)',

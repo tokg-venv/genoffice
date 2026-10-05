@@ -65,6 +65,7 @@ export const es = {
   ribbonOpen: 'Abrir…',
   ribbonSave: 'Guardar',
   ribbonSaveAs: 'Guardar como…',
+  ribbonNameWithAi: 'Nombrar con IA…',
   ribbonPaste: 'Pegar',
   ribbonCutTip: 'Cortar (⌘X)',
   ribbonCopyTip: 'Copiar (⌘C)',

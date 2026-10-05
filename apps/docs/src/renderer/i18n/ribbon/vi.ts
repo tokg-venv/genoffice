@@ -64,6 +64,7 @@ export const vi = {
   ribbonOpen: 'Mở…',
   ribbonSave: 'Lưu',
   ribbonSaveAs: 'Lưu dưới dạng…',
+  ribbonNameWithAi: 'Đặt tên bằng AI…',
   ribbonPaste: 'Dán',
   ribbonCutTip: 'Cắt (⌘X)',
   ribbonCopyTip: 'Sao chép (⌘C)',

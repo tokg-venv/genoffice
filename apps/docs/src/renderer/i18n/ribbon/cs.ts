@@ -64,6 +64,7 @@ export const cs = {
   ribbonOpen: 'Otevřít…',
   ribbonSave: 'Uložit',
   ribbonSaveAs: 'Uložit jako…',
+  ribbonNameWithAi: 'Název pomocí AI…',
   ribbonPaste: 'Vložit',
   ribbonCutTip: 'Vyjmout (⌘X)',
   ribbonCopyTip: 'Kopírovat (⌘C)',
