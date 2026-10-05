@@ -63,6 +63,7 @@ export const de = {
   openExternal: 'Link im Browser geöffnet',
   save: 'Speichern (⌘S)',
   saveAs: 'Speichern unter…',
+  aiNameFile: 'Mit KI benennen…',
   ribbonCollapse: 'Menüband reduzieren',
   ribbonExpand: 'Menüband erweitern',
   ribbonGroupInsert: 'Einfügen',
