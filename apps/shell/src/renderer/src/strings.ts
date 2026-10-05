@@ -383,6 +383,9 @@ export const strings = {
     onbBody3: '无授权费用，无广告，无水印。',
     onbNote3: 'AI 功能可能消耗 Genspark 积分。',
     onbBack: '上一步',
+    setAiAutoFileNaming: '用 AI 自动命名新文件',
+    setAiAutoFileNamingDesc:
+      '新文档第一次保存时，用 AI 根据内容起一个文件名（内容里对 AI 隐藏的部分只会显示为占位符）。',
   },
   en: {
     addFolderRoot: 'Add folder…',
@@ -776,6 +779,9 @@ export const strings = {
     onbBody3: 'No license fees. No ads. No watermarks.',
     onbNote3: 'AI features may consume Genspark credits.',
     onbBack: 'Back',
+    setAiAutoFileNaming: 'Name new files with AI',
+    setAiAutoFileNamingDesc:
+      "On a new document's first save, let the model suggest a name from its contents (anything you hid from the model shows up as a placeholder).",
   },
   vi: {
     addFolderRoot: 'Thêm thư mục…',
@@ -1171,6 +1177,9 @@ export const strings = {
     onbBody3: 'Không phí bản quyền. Không quảng cáo. Không hình mờ.',
     onbNote3: 'Các tính năng AI có thể tiêu tốn credit Genspark.',
     onbBack: 'Quay lại',
+    setAiAutoFileNaming: 'Đặt tên tệp mới bằng AI',
+    setAiAutoFileNamingDesc:
+      'Khi lưu tài liệu mới lần đầu, để AI đặt tên tệp từ nội dung (phần bạn đã ẩn khỏi AI sẽ hiện thành trình giữ chỗ).',
   },
   ja: {
     addFolderRoot: 'フォルダーを追加…',
@@ -1579,6 +1588,9 @@ export const strings = {
     onbBody3: 'ライセンス料なし、広告なし、透かしなし。',
     onbNote3: 'AI 機能は Genspark クレジットを消費する場合があります。',
     onbBack: '戻る',
+    setAiAutoFileNaming: 'AI で新規ファイルに名前を付ける',
+    setAiAutoFileNamingDesc:
+      '新規ドキュメントの初回保存時に、内容から AI がファイル名を提案します（AI から隠した部分はプレースホルダーとして表示されます）。',
   },
   ko: {
     addFolderRoot: '폴더 추가…',
@@ -1977,6 +1989,9 @@ export const strings = {
     onbBody3: '라이선스 비용 없음, 광고 없음, 워터마크 없음.',
     onbNote3: 'AI 기능은 Genspark 크레딧을 소모할 수 있습니다.',
     onbBack: '이전',
+    setAiAutoFileNaming: 'AI로 새 파일 이름 지정',
+    setAiAutoFileNamingDesc:
+      '새 문서의 첫 저장 시 AI가 내용에서 파일 이름을 제안합니다(AI에서 숨긴 부분은 자리표시자로 표시됩니다).',
   },
   fr: {
     addFolderRoot: 'Ajouter un dossier…',
@@ -2391,6 +2406,9 @@ export const strings = {
     onbBody3: 'Pas de licence. Pas de publicité. Pas de filigrane.',
     onbNote3: 'Les fonctions IA peuvent consommer des crédits Genspark.',
     onbBack: 'Retour',
+    setAiAutoFileNaming: 'Nommer les nouveaux fichiers avec l’IA',
+    setAiAutoFileNamingDesc:
+      "À la première sauvegarde d'un nouveau document, l'IA propose un nom d'après son contenu (ce que vous avez masqué à l'IA n'apparaît que comme un espace réservé).",
   },
   de: {
     addFolderRoot: 'Ordner hinzufügen…',
@@ -2807,6 +2825,9 @@ export const strings = {
     onbBody3: 'Keine Lizenzgebühren. Keine Werbung. Keine Wasserzeichen.',
     onbNote3: 'KI-Funktionen können Genspark-Credits verbrauchen.',
     onbBack: 'Zurück',
+    setAiAutoFileNaming: 'Neue Dateien mit der KI benennen',
+    setAiAutoFileNamingDesc:
+      'Beim ersten Speichern eines neuen Dokuments schlägt die KI einen Namen aus dem Inhalt vor (für die KI ausgeblendete Teile erscheinen nur als Platzhalter).',
   },
   es: {
     addFolderRoot: 'Añadir carpeta…',
@@ -3219,6 +3240,9 @@ export const strings = {
     onbBody3: 'Sin licencias. Sin anuncios. Sin marcas de agua.',
     onbNote3: 'Las funciones de IA pueden consumir créditos de Genspark.',
     onbBack: 'Atrás',
+    setAiAutoFileNaming: 'Nombrar archivos nuevos con IA',
+    setAiAutoFileNamingDesc:
+      'Al guardar por primera vez un documento nuevo, la IA propone un nombre a partir de su contenido (lo que ocultaste a la IA solo aparece como marcador).',
   },
   th: {
     addFolderRoot: 'เพิ่มโฟลเดอร์…',
@@ -3614,6 +3638,9 @@ export const strings = {
     onbBody3: 'ไม่มีค่าลิขสิทธิ์ ไม่มีโฆษณา ไม่มีลายน้ำ',
     onbNote3: 'ฟีเจอร์ AI อาจใช้เครดิต Genspark',
     onbBack: 'ย้อนกลับ',
+    setAiAutoFileNaming: 'ตั้งชื่อไฟล์ใหม่ด้วย AI',
+    setAiAutoFileNamingDesc:
+      'เมื่อบันทึกเอกสารใหม่ครั้งแรก AI จะเสนอชื่อไฟล์จากเนื้อหา (ส่วนที่คุณซ่อนจาก AI จะแสดงเป็นตัวแทนเท่านั้น)',
   },
   id: {
     addFolderRoot: 'Tambah folder…',
@@ -4020,6 +4047,9 @@ export const strings = {
     onbBody3: 'Tanpa biaya lisensi. Tanpa iklan. Tanpa watermark.',
     onbNote3: 'Fitur AI dapat menggunakan kredit Genspark.',
     onbBack: 'Kembali',
+    setAiAutoFileNaming: 'Beri nama file baru dengan AI',
+    setAiAutoFileNamingDesc:
+      'Saat dokumen baru disimpan pertama kali, AI mengusulkan nama file dari isinya (bagian yang disembunyikan dari AI hanya muncul sebagai placeholder).',
   },
   ru: {
     addFolderRoot: 'Добавить папку…',
@@ -4424,6 +4454,9 @@ export const strings = {
     onbBody3: 'Без лицензий. Без рекламы. Без водяных знаков.',
     onbNote3: 'Функции ИИ могут расходовать кредиты Genspark.',
     onbBack: 'Назад',
+    setAiAutoFileNaming: 'Именовать новые файлы с помощью ИИ',
+    setAiAutoFileNamingDesc:
+      'При первом сохранении нового документа ИИ предложит имя по содержимому (скрытое от ИИ показывается только как заполнитель).',
   },
   ar: {
     addFolderRoot: 'إضافة مجلد…',
@@ -4820,6 +4853,9 @@ export const strings = {
     onbBody3: 'بلا رسوم ترخيص، بلا إعلانات، بلا علامات مائية.',
     onbNote3: 'قد تستهلك ميزات الذكاء الاصطناعي أرصدة Genspark.',
     onbBack: 'رجوع',
+    setAiAutoFileNaming: 'تسمية الملفات الجديدة بالذكاء الاصطناعي',
+    setAiAutoFileNamingDesc:
+      'عند حفظ مستند جديد لأول مرة، يقترح الذكاء الاصطناعي اسماً من محتواه (ما أخفيته عن الذكاء الاصطناعي يظهر كعنصر نائب فقط).',
   },
   pt: {
     addFolderRoot: 'Adicionar pasta…',
@@ -5221,6 +5257,9 @@ export const strings = {
     onbBody3: "Sem licenças. Sem anúncios. Sem marcas d'água.",
     onbNote3: 'Os recursos de IA podem consumir créditos Genspark.',
     onbBack: 'Voltar',
+    setAiAutoFileNaming: 'Nomear ficheiros novos com IA',
+    setAiAutoFileNamingDesc:
+      'Ao guardar um novo documento pela primeira vez, a IA sugere um nome a partir do seu conteúdo (o que ocultaste da IA aparece apenas como marcador).',
   },
   it: {
     addFolderRoot: 'Aggiungi cartella…',
@@ -5621,6 +5660,9 @@ export const strings = {
     onbBody3: 'Nessuna licenza. Nessuna pubblicità. Nessuna filigrana.',
     onbNote3: 'Le funzioni IA possono consumare crediti Genspark.',
     onbBack: 'Indietro',
+    setAiAutoFileNaming: 'Assegna un nome AI ai nuovi file',
+    setAiAutoFileNamingDesc:
+      'Al primo salvataggio di un nuovo documento, l’IA propone un nome dal suo contenuto (ciò che hai nascosto all’IA compare solo come segnaposto).',
   },
   pl: {
     addFolderRoot: 'Dodaj folder…',
@@ -6016,6 +6058,9 @@ export const strings = {
     onbBody3: 'Bez opłat licencyjnych. Bez reklam. Bez znaków wodnych.',
     onbNote3: 'Funkcje AI mogą zużywać kredyty Genspark.',
     onbBack: 'Wstecz',
+    setAiAutoFileNaming: 'Nadaj nazwy nowym plikom za pomocą AI',
+    setAiAutoFileNamingDesc:
+      'Przy pierwszym zapisie nowego dokumentu AI zaproponuje nazwę na podstawie treści (ukryte przed AI widać tylko jako symbol zastępczy).',
   },
   cs: {
     addFolderRoot: 'Přidat složku…',
@@ -6411,6 +6456,9 @@ export const strings = {
     setAiOpenInNewDocs: 'Otevírat panel AI v nových dokumentech',
     setAiOpenInNewDocsDesc:
       'Když je vypnuto, nově otevřené dokumenty začínají se sbaleným panelem AI; v případě potřeby stačí jedno kliknutí.',
+    setAiAutoFileNaming: 'Pojmenovat nové soubory pomocí AI',
+    setAiAutoFileNamingDesc:
+      'Při prvním uložení nového dokumentu AI navrhne název podle jeho obsahu (co jste AI skryli, se zobrazí jen jako zástupný symbol).',
   },
   nl: {
     addFolderRoot: 'Map toevoegen…',
@@ -6809,6 +6857,9 @@ export const strings = {
     onbBody3: 'Geen licentiekosten. Geen advertenties. Geen watermerken.',
     onbNote3: 'AI-functies kunnen Genspark-credits verbruiken.',
     onbBack: 'Terug',
+    setAiAutoFileNaming: 'Nieuwe bestanden met AI benoemen',
+    setAiAutoFileNamingDesc:
+      'Bij het eerst opslaan van een nieuw document stelt de AI een naam voor op basis van de inhoud (wat je voor de AI hebt verborgen, verschijnt alleen als placeholder).',
   },
   ms: {
     addFolderRoot: 'Tambah folder…',
@@ -7210,6 +7261,9 @@ export const strings = {
     onbBody3: 'Tiada yuran lesen. Tiada iklan. Tiada tera air.',
     onbNote3: 'Ciri AI mungkin menggunakan kredit Genspark.',
     onbBack: 'Kembali',
+    setAiAutoFileNaming: 'Namakan fail baharu dengan AI',
+    setAiAutoFileNamingDesc:
+      'When document baharu disimpan kali pertama, AI akan mencadangkan nama daripada kandungannya (apa yang anda sembunyikan daripada AI hanya muncul sebagai placeholder).',
   },
   he: {
     addFolderRoot: 'הוספת תיקייה…',
@@ -7593,6 +7647,9 @@ export const strings = {
     onbBody3: 'ללא דמי רישיון, ללא פרסומות, ללא סימני מים.',
     onbNote3: 'תכונות AI עשויות לצרוך קרדיטים של Genspark.',
     onbBack: 'חזרה',
+    setAiAutoFileNaming: 'מתן שמות לקבצים חדשים באמצעות AI',
+    setAiAutoFileNamingDesc:
+      'בשמירה הראשונה של מסמך חדש, ה-AI יציע שם לפי התוכן (מה שהוסתר מה-AI יופיע רק כממלא מקום).',
   },
   hi: {
     addFolderRoot: 'फ़ोल्डर जोड़ें…',
@@ -7988,6 +8045,9 @@ export const strings = {
     onbBody3: 'कोई लाइसेंस शुल्क नहीं। कोई विज्ञापन नहीं। कोई वॉटरमार्क नहीं।',
     onbNote3: 'AI सुविधाएँ Genspark क्रेडिट खर्च कर सकती हैं।',
     onbBack: 'वापस',
+    setAiAutoFileNaming: 'AI से नई फ़ाइलों का नाम रखें',
+    setAiAutoFileNamingDesc:
+      'नए दस्तावेज़ की पहली सहेज पर AI उसकी सामग्री से नाम सुझाएगा (जो आपने AI से छिपाया है वह केवल प्लेसहोल्डर के रूप में दिखेगा)।',
   },
   'zh-TW': {
     addFolderRoot: '加入資料夾…',
@@ -8364,5 +8424,8 @@ export const strings = {
     onbBody3: '無授權費用，無廣告，無浮水印。',
     onbNote3: 'AI 功能可能消耗 Genspark 點數。',
     onbBack: '上一步',
+    setAiAutoFileNaming: '用 AI 自動命名新檔案',
+    setAiAutoFileNamingDesc:
+      '新文件第一次儲存時，用 AI 依內容取一個檔名（內容中對 AI 隱藏的部分只會顯示為預留位置）。',
   },
 } as const
