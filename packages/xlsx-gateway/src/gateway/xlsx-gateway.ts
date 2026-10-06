@@ -984,14 +984,15 @@ export async function planCellEditsToXlsx(
   // Withheld cells travel in a package part of their own, so they are written
   // here rather than with the worksheets. A sheet renamed or removed in this
   // same save takes its marks with it first — see rekeyRedactionStates.
-  if (redactionStates.length > 0) {
-    const rekeyed = rekeyRedactionStates(
-      redactionStates,
-      sheetPlan?.renames ?? [],
-      sheetPlan?.removals ?? [],
-    )
-    await applyRedactionPart(pkg, touchedEntries, rekeyed)
-  }
+  // Unconditional, including for an empty list. Clearing the last mark has to
+  // remove the part, and a call guarded on "there is something to write" is
+  // exactly the call that never happens when the reader un-hides everything.
+  const rekeyed = rekeyRedactionStates(
+    redactionStates,
+    sheetPlan?.renames ?? [],
+    sheetPlan?.removals ?? [],
+  )
+  await applyRedactionPart(pkg, touchedEntries, rekeyed)
 
   const editsBySheet = groupBySheet(edits)
   const fillsBySheet = groupBySheet(bulkConstantFills)

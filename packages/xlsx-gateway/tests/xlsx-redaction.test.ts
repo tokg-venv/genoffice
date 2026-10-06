@@ -19,16 +19,19 @@ const STATES: SheetRedactionState[] = [{ sheetName: 'Sheet1', marks: [MARK] }]
 /// tests can assert on the plan rather than on a real package.
 function fakePackage(initial: Record<string, string> = {}): RedactionPackage & {
   added: string[]
+  removed: string[]
   written: string[]
   touched: Set<string>
   files: Map<string, string>
 } {
   const files = new Map(Object.entries(initial))
   const added: string[] = []
+  const removed: string[] = []
   const written: string[] = []
   return {
     files,
     added,
+    removed,
     written,
     touched: new Set<string>(),
     has: (path) => Promise.resolve(files.has(path)),
@@ -44,6 +47,10 @@ function fakePackage(initial: Record<string, string> = {}): RedactionPackage & {
     add(path, content) {
       added.push(path)
       files.set(path, content)
+    },
+    remove(path) {
+      removed.push(path)
+      files.delete(path)
     },
   }
 }
@@ -218,6 +225,45 @@ describe('writing the part into the package', () => {
         const types = pkg.files.get('[Content_Types].xml') ?? ''
         expect(types.match(/gxRedactions\.json/g)?.length ?? 0).toBe(1)
       })
+  })
+
+  it('removes the part when the last mark is cleared', async () => {
+    // The mirror of the case above, and the one that used to do nothing: an
+    // early return left the part, so the next open read the stale marks and
+    // the span came back after the reader had un-hidden it.
+    const pkg = fakePackage({
+      'xl/gxRedactions.json': '{"version":1,"sheets":[]}',
+      'xl/_rels/workbook.xml.rels':
+        '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="x" Target="a.xml"/></Relationships>',
+      '[Content_Types].xml':
+        '<Types xmlns="x"><Override PartName="/xl/gxRedactions.json" ContentType="y"/></Types>',
+    })
+    await applyRedactionPart(pkg, pkg.touched, [{ sheetName: 'Sheet1', marks: [] }])
+    expect(pkg.removed).toContain('xl/gxRedactions.json')
+    expect(pkg.files.has('xl/gxRedactions.json')).toBe(false)
+  })
+
+  it('removes the relationship and the override with it', async () => {
+    // An orphan override is worse than an orphan part: Excel complains about the
+    // file on open, so all three have to go or the reader's file is damaged.
+    const pkg = fakePackage({
+      'xl/gxRedactions.json': '{"version":1,"sheets":[]}',
+      'xl/_rels/workbook.xml.rels':
+        '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId9" Type="' +
+        'https://schemas.genspark.ai/genoffice/2026/relationships/redactions' +
+        '" Target="gxRedactions.json"/></Relationships>',
+      '[Content_Types].xml':
+        '<Types xmlns="x"><Override PartName="/xl/gxRedactions.json" ContentType="y"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="y"/></Types>',
+    })
+    await applyRedactionPart(pkg, pkg.touched, [])
+    expect(pkg.files.get('xl/_rels/workbook.xml.rels')).not.toContain('gxRedactions')
+    const types = pkg.files.get('[Content_Types].xml') ?? ''
+    expect(types).not.toContain('gxRedactions.json')
+    // and the entries that were not ours are untouched
+    expect(types).toContain('/xl/workbook.xml')
   })
 
   it('leaves a workbook with nothing withheld untouched', () => {

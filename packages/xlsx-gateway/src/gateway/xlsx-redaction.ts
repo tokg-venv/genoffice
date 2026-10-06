@@ -74,6 +74,7 @@ export interface RedactionPackage {
   readText(path: string): Promise<string>
   write(path: string, content: string): void
   add(path: string, content: string): void
+  remove(path: string): void
 }
 
 function isNonNegativeInteger(value: unknown): value is number {
@@ -237,6 +238,43 @@ export function rekeyRedactionStates(
  * free to discard it), and a content-type override. `ensureDynamicArrayMetadata`
  * does the same for `xl/metadata.xml`; the recipe is unchanged.
  */
+/**
+ * Undo everything `applyRedactionPart` added: the part, the workbook
+ * relationship, and the content-type override.
+ *
+ * All three, or the file is worse than before — an orphan part with a dangling
+ * override is a difference the reader's file now carries forever, and Excel
+ * complains about it on open.
+ */
+async function removeRedactionPart(
+  pkg: RedactionPackage,
+  touchedEntries: Set<string>,
+): Promise<void> {
+  if (!(await pkg.has(REDACTION_PART_PATH))) return
+  pkg.remove(REDACTION_PART_PATH)
+  touchedEntries.add(REDACTION_PART_PATH)
+
+  const relationships = await pkg.readText(WORKBOOK_RELS_PATH)
+  const withoutRel = relationships.replace(
+    new RegExp(`<Relationship\\b[^>]*Type="${REDACTION_REL_TYPE}"[^>]*/?>`),
+    '',
+  )
+  if (withoutRel !== relationships) {
+    pkg.write(WORKBOOK_RELS_PATH, withoutRel)
+    touchedEntries.add(WORKBOOK_RELS_PATH)
+  }
+
+  const contentTypes = await pkg.readText(CONTENT_TYPES_PATH)
+  const withoutOverride = contentTypes.replace(
+    new RegExp(`<Override\\b[^>]*PartName="/${REDACTION_PART_PATH}"[^>]*/>`),
+    '',
+  )
+  if (withoutOverride !== contentTypes) {
+    pkg.write(CONTENT_TYPES_PATH, withoutOverride)
+    touchedEntries.add(CONTENT_TYPES_PATH)
+  }
+}
+
 export async function applyRedactionPart(
   pkg: RedactionPackage,
   touchedEntries: Set<string>,
@@ -244,7 +282,16 @@ export async function applyRedactionPart(
 ): Promise<void> {
   // A workbook with nothing withheld must not grow the part: an empty part
   // would be a difference from the file the reader opened, forever after.
-  if (states.every((state) => state.marks.length === 0)) return
+  //
+  // And a workbook that *used* to withhold something must not keep it. An
+  // early return here left the part, its relationship and its content-type
+  // override in the package, so clearing the last mark did nothing: the next
+  // open read the stale part and the span came back. Clearing is the one
+  // operation that has to undo what setting did.
+  if (states.every((state) => state.marks.length === 0)) {
+    await removeRedactionPart(pkg, touchedEntries)
+    return
+  }
 
   const content = serializeRedactionPart(states)
   if (await pkg.has(REDACTION_PART_PATH)) {

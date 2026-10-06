@@ -144,6 +144,7 @@ import {
 import { InMemoryWorkbookAdapter } from '@genoffice/xlsx-gateway/domain/in-memory-workbook'
 import { cfRuleUnsaveableReason, iconSetSaveable } from '@genoffice/xlsx-gateway/gateway/xlsx-cf'
 import type { SheetRedactionState } from '@genoffice/xlsx-gateway/gateway/xlsx-redaction'
+import { statesOnScreen } from './redact-marks-shift'
 import { installLazyFindBridge } from './lazy-find'
 import { installReplaceAutoSearch } from './replace-autosearch'
 import { FindReplacePanel } from './FindReplacePanel'
@@ -1626,8 +1627,50 @@ export function App({
     return { univerRef, lazyWorkbookRef, adapterRef, redactionIndexRef }
   }
 
+  /**
+   * The index the grid, the tint and the model all read.
+   *
+   * `redactionStatesRef` holds the marks in file coordinates — where the
+   * reader put them, and where a save writes them. The grid is somewhere else
+   * after this session's row and column edits, so the index is derived by
+   * replaying the journal's structural ops rather than by moving the marks and
+   * trying to move them back on undo. The journal is already how a streamed
+   * viewport survives the same shift, and it cancels an insert/remove pair on
+   * undo, so a mark follows the grid for free and returns with ⌘Z.
+   */
+  function rebuildRedactionIndex(): void {
+    const journal = lazyWorkbookRef.current?.editJournal
+    if (!journal) return
+    const sheets = getActiveSheetInfo().sheets
+    const idByName = new Map(sheets.map((sheet) => [sheet.name, sheet.id]))
+    const onScreen = statesOnScreen(redactionStatesRef.current, (name) => {
+      const id = idByName.get(name)
+      return id === undefined ? [] : (journal.structuralOps.get(id) ?? [])
+    })
+    redactionIndexRef.current = indexFor(onScreen, sheets)
+  }
+
   function getActiveSheetInfo(): ActiveSheetInfo {
     return getActiveSheetInfoImpl(readContext(), aiRunScopeRef.current)
+  }
+
+  /**
+   * Re-derive the index whenever the grid's structure changes.
+   *
+   * A row inserted above a mark leaves it covering whatever shifted down into
+   * its place, and the app looks right the whole time — the tint is drawn from
+   * the mark — so the leak only appears in the saved file, on the next open, on
+   * someone else's machine. The AI's own inserts are refused while a mark would
+   * move (`ai/redact-guard.ts`); a person inserting a row from the grid is the
+   * case no guard sees.
+   */
+  const watchStructuralEditsForMarks = (): void => {
+    const api = univerRef.current?.univerAPI
+    if (!api) return
+    api.onCommandExecuted((command: { id?: string }) => {
+      if (!command?.id || !STRUCTURAL_EDIT_COMMAND_PATTERN.test(command.id)) return
+      rebuildRedactionIndex()
+    })
   }
 
   /** Turn a grid right-click into either a dialog or an immediate clear. */
@@ -4212,6 +4255,7 @@ export function App({
         const session = redactionSessionFor(result, getActiveSheetInfo().sheets)
         redactionIndexRef.current = session.index
         redactionStatesRef.current = result.status === 'ok' ? result.states : []
+        watchStructuralEditsForMarks()
         // What the file holds is the baseline a later edit is measured against.
         loadedRedactionStatesRef.current = redactionStatesRef.current
         if (session.error !== null) setMessage(session.error)
