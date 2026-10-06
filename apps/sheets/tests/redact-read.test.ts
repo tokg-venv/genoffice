@@ -130,6 +130,12 @@ describe('the withheld-cell index', () => {
 describe('the label conventions shared with the other apps', () => {
   it('strips the characters that would break a carrier or a prompt', () => {
     expect(sanitizeLabel('  a{b}c<d>e="f"\'g*h/i  ')).toBe('abcdefghi')
+
+    // the marker carries the same rules as the label it wraps: a `*` or a `/`
+    // reaching a comment carrier would close it early. This is why
+    // `placeholderSource` is bound to the sheet's sanitiser rather than
+    // re-exported from the shared one.
+    expect(placeholderSource('a*b/c')).toBe('{{abc}}')
   })
 
   it('renders the same {{label}} the other apps show', () => {

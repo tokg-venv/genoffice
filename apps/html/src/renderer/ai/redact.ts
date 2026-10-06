@@ -42,6 +42,12 @@ import type { ParseMap } from '../document/parse-map'
  * keeps the replaced spans and can translate an offset in either direction.
  */
 
+import {
+  sanitizeLabel as coreSanitizeLabel,
+  placeholderInstruction as buildInstruction,
+  type PlaceholderSpec,
+} from '@genoffice/agent-core/redact-core'
+
 /** Attribute marking an element's own content. */
 export const MARK_ATTR = 'data-gx-redact'
 /** Prefix for marking one attribute's value: `data-gx-redact-src="label"`. */
@@ -49,103 +55,6 @@ export const MARK_ATTR_PREFIX = 'data-gx-redact-'
 
 /** `/*gx:redact:label*\/` — legal JavaScript, ignored by the engine, inert to the page. */
 const SCRIPT_MARK_RE = /\/\*gx:redact:([^]*?)\*\//g
-
-/** Long enough to name what a span stands for, short enough to stay readable. */
-export const MAX_LABEL_LENGTH = 40
-
-const OPEN = '{{'
-const CLOSE = '}}'
-
-/**
- * Clean a label for storage and for the model prompt.
- *
- * The character set has to be safe for **both** carriers, not just one. A label
- * goes into a `data-*` attribute value and into a comment that opens a script
- * literal, so `*` and `/` are stripped here rather than in the caller: two
- * sanitizers would drift, and a label holding both would close the comment
- * early and turn the rest of the line into code. Stripping them costs a label
- * nothing worth keeping, because a label is a name like "API key".
- */
-export function sanitizeLabel(raw: string): string {
-  return raw
-    .replace(/[{}<>="'*/]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_LABEL_LENGTH)
-    .trim()
-}
-
-/** The literal text the model is shown in place of a withheld span. */
-export function placeholderSource(label: string): string {
-  return `${OPEN}${sanitizeLabel(label) || 'private'}${CLOSE}`
-}
-
-export function isWholePlaceholder(text: string): boolean {
-  const t = text.trim()
-  return t.startsWith(OPEN) && t.endsWith(CLOSE) && t.length > OPEN.length + CLOSE.length
-}
-
-export function readPlaceholderLabel(text: string): string | null {
-  if (!isWholePlaceholder(text)) return null
-  return text.trim().slice(OPEN.length, -CLOSE.length)
-}
-
-export interface PlaceholderIssue {
-  found: string
-  expected: string
-  reason: 'split' | 'missing' | 'unknown'
-}
-
-function scan(text: string): string[] {
-  return [...text.matchAll(/\{\{[^{}]*\}\}/g)].map((m) => m[0])
-}
-
-/** Braces a malformed marker left behind, with well-formed ones masked out first. */
-function leftoverBraces(text: string): string[] {
-  const masked = text.replace(/\{\{[^{}]*\}\}/g, (m) => ' '.repeat(m.length))
-  const out: string[] = []
-  for (const m of masked.matchAll(/\{\{|\}\}/g)) out.push(m[0])
-  for (const m of masked.matchAll(/(?<!\{)\{[^{}]*\}(?!\})/g)) out.push(m[0])
-  return out
-}
-
-/** Every marker in a piece of text, in order. */
-export function collectPlaceholders(text: string): string[] {
-  return scan(text)
-}
-
-/**
- * Compare the markers in a model's answer against the ones it was given.
- *
- * Order is ignored — a model may rewrite the sentence — but the count and the
- * exact spelling are not. Accepting anything else writes a mangled marker into a
- * file that still opens, so the damage is silent.
- */
-export function checkPlaceholders(before: string, after: string): PlaceholderIssue[] {
-  const issues: PlaceholderIssue[] = []
-  for (const stray of leftoverBraces(after)) {
-    issues.push({ found: stray, expected: '', reason: 'split' })
-  }
-  const got = new Map<string, number>()
-  for (const m of scan(after)) got.set(m, (got.get(m) ?? 0) + 1)
-  const want = new Map<string, number>()
-  for (const m of scan(before)) want.set(m, (want.get(m) ?? 0) + 1)
-  for (const [marker, n] of want) {
-    if ((got.get(marker) ?? 0) < n) {
-      issues.push({
-        found: (got.get(marker) ?? 0) ? marker : '',
-        expected: marker,
-        reason: 'missing',
-      })
-    }
-  }
-  for (const [marker, n] of got) {
-    if (!want.has(marker)) issues.push({ found: marker, expected: '', reason: 'unknown' })
-    else if (n > (want.get(marker) ?? 0))
-      issues.push({ found: marker, expected: marker, reason: 'unknown' })
-  }
-  return issues
-}
 
 /** One withheld region, in the coordinates of the real source. */
 export interface WithheldSpan {
@@ -399,24 +308,53 @@ export function buildProjection(source: string, map: ParseMap): RedactionProject
   return new RedactionProjection(source, collectWithheld(source, map))
 }
 
-/** The instruction a model gets, naming the placeholders this file actually has. */
-export function placeholderInstruction(labels: readonly string[]): string {
-  const list = [...new Set(labels)].map((l) => `- ${placeholderSource(l)}`).join('\n')
-  return [
-    '## Private placeholders',
-    'This page contains {{...}} placeholders. Each stands in for something the reader has deliberately withheld from you; you cannot see what is inside, and that is the point.',
-    '',
-    'Treat every placeholder as one indivisible object:',
-    '- Copy it character for character — same letters, same order, same spacing.',
-    '- Never split it across a line break or put a space inside it.',
-    '- Never merge two into one, never split one into several, never reorder them.',
-    '- Never rename, translate, re-case, expand or shorten it.',
-    '- Never drop one, and never add a placeholder that was not already there.',
-    '',
+/**
+ * A label, cleaned for a comment carrier.
+ *
+ * Two characters more than the shared default strips, and bound here rather
+ * than re-exported: a page's label lands in a `/*gx:redact:...*\/` script
+ * comment or a `data-gx-redact-<attr>` value, and a `*` or `/` in either would
+ * close the comment early and take the rest of the marker with it. A
+ * document's label is not in a comment, and stripping these there would rename
+ * a span the reader can see.
+ */
+export const sanitizeLabel = (raw: string): string => coreSanitizeLabel(raw, { forComment: true })
+
+/** The form the model sees; braces make a marker recognisable in a reply. */
+const OPEN = '{{'
+const CLOSE = '}}'
+
+/**
+ * The literal text the model is shown in place of what was withheld.
+ *
+ * Not the shared one: that builds from the default sanitiser, and a page's
+ * label goes through the stricter one.
+ */
+export function placeholderSource(label: string): string {
+  return `${OPEN}${sanitizeLabel(label) || 'private'}${CLOSE}`
+}
+
+/** What this editor's markers need that another's do not. */
+const HTML_SPEC: PlaceholderSpec = {
+  subject: 'page',
+  opening:
+    'Each stands in for something the reader has deliberately withheld from you; you cannot see what is inside, and that is the point.',
+  boundary: 'a line break',
+  middle: [
     'A placeholder may stand in for visible text, for the value of an attribute (a key, a token, a URL), for a value inside a <script>, or for a whole comment. In every case it is text you were not given: write around it rather than guessing.',
     'A withheld attribute or script value still governs how the page behaves. Do not invent a replacement for it and do not remove the thing that carries it.',
-    '',
-    'The placeholders in this page:',
-    list,
-  ].join('\n')
+  ],
 }
+
+export function placeholderInstruction(labels: readonly string[]): string {
+  return buildInstruction(labels, HTML_SPEC)
+}
+
+export {
+  MAX_LABEL_LENGTH,
+  checkPlaceholders,
+  collectPlaceholders,
+  isWholePlaceholder,
+  readPlaceholderLabel,
+  type PlaceholderIssue,
+} from '@genoffice/agent-core/redact-core'

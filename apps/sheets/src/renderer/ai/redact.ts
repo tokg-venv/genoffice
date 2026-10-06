@@ -23,11 +23,11 @@ import type { SheetRedactionState } from '@genoffice/xlsx-gateway/gateway/xlsx-r
 
 import { parseAddressParts } from '../formula-values'
 import type { CellScalar } from '@genoffice/xlsx-gateway/domain/workbook.types'
-
-export const MAX_LABEL_LENGTH = 40
-
-const OPEN = '{{'
-const CLOSE = '}}'
+import {
+  placeholderInstruction as buildInstruction,
+  sanitizeLabel as coreSanitizeLabel,
+  type PlaceholderSpec,
+} from '@genoffice/agent-core/redact-core'
 
 /**
  * Clean a label for storage and for the model prompt.
@@ -37,16 +37,28 @@ const CLOSE = '}}'
  * comment). A label carries no such risk in a JSON part, but a reader who has
  * learned the rule in one app should not find it relaxed in another.
  */
-export function sanitizeLabel(raw: string): string {
-  return raw
-    .replace(/[{}<>="'*/]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_LABEL_LENGTH)
-    .trim()
-}
+/**
+ * A cell's label, cleaned for a comment carrier.
+ *
+ * Two characters more than the shared version strips, and deliberately bound
+ * here rather than re-exported: a sheet's label is written into an XML
+ * comment, where `*` and `/` would close it early and take the rest of the
+ * marker with it. A document's label is not in a comment, and stripping these
+ * there would rename a span the reader can see.
+ */
+/** The form the model sees; braces make a marker recognisable in a reply. */
+const OPEN = '{{'
+const CLOSE = '}}'
 
-/** The literal text the model is shown in place of a withheld value. */
+export const sanitizeLabel = (raw: string): string => coreSanitizeLabel(raw, { forComment: true })
+
+/**
+ * The literal text the model is shown in place of a withheld value.
+ *
+ * Not the shared one: that builds from the default sanitiser, and a sheet's
+ * label goes through the stricter one. Re-exporting it here would put a `*` or
+ * a `/` back into a comment carrier — silently, and only for this editor.
+ */
 export function placeholderSource(label: string): string {
   return `${OPEN}${sanitizeLabel(label) || 'private'}${CLOSE}`
 }
@@ -265,27 +277,31 @@ export function countWithheldIn(
  * 2. A withheld cell does not appear in `find_cells` results at all, so the
  *    model must not conclude the value is absent from the workbook.
  */
-export function placeholderInstruction(labels: readonly string[]): string {
-  const list = [...new Set(labels)].map((l) => `- {{${sanitizeLabel(l) || 'private'}}}`).join('\n')
-  return [
-    '## Private placeholders',
-    'This workbook contains {{...}} placeholders. Each stands in for something the reader has deliberately withheld from you; you cannot see what is inside, and that is the point.',
-    '',
-    'Treat every placeholder as one indivisible object:',
-    '- Copy it character for character — same letters, same order, same spacing.',
-    '- Never split it across a cell boundary or put a space inside it.',
-    '- Never merge two into one, never split one into several, never reorder them.',
-    '- Never rename, translate, re-case, expand or shorten it.',
-    '- Never drop one, and never add a placeholder that was not already there.',
-    '',
+/** What a workbook's markers need that a document's or a deck's do not. */
+const SHEET_SPEC: PlaceholderSpec = {
+  subject: 'workbook',
+  opening:
+    'Each stands in for something the reader has deliberately withheld from you; you cannot see what is inside, and that is the point.',
+  // a sheet's marker cannot be split across cells, not across lines
+  boundary: 'a cell boundary',
+  middle: [
     'Write text around them as if each stood for the value it replaces, so a row reading "call {{客户电话}}" still means what it says.',
     'If a request needs what a placeholder hides, work around it rather than guessing.',
-    '',
     'Two consequences you must respect, or you will recover what the reader hid:',
     '- Withheld cells are **left out of every statistic**. A sum, average, min, max, distinct count or top-value list over a range that contains one covers only the remaining cells, and `aggregate_range` reports how many were withheld. Never add the withheld values back in, and never treat a total as covering the whole range.',
     '- Withheld cells are **absent from `find_cells` results**. If a search returns nothing, that does not mean the value is not in the workbook — it may simply be withheld. Never conclude a value is missing from the file.',
-    '',
-    'The placeholders in this workbook:',
-    list,
-  ].join('\n')
+  ],
 }
+
+export function placeholderInstruction(labels: readonly string[]): string {
+  return buildInstruction(labels, SHEET_SPEC)
+}
+
+export {
+  MAX_LABEL_LENGTH,
+  checkPlaceholders,
+  collectPlaceholders,
+  isWholePlaceholder,
+  readPlaceholderLabel,
+  type PlaceholderIssue,
+} from '@genoffice/agent-core/redact-core'
