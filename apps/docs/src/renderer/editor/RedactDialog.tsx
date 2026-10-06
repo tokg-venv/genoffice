@@ -40,6 +40,8 @@ export function RedactDialog({ seed, onSubmit, onCancel }: Props) {
         {/* the action is the heading; the explanation is the sentence under it */}
         <h2>{t('redactMenuLabel')}</h2>
         <p className="redact-desc">{t('redactDialogDesc')}</p>
+        {/* the claim above is about this app's AI; the file still has the words */}
+        <p className="redact-desc">{t('redactDialogScope')}</p>
         <div className="redact-preview">{placeholderSource(label)}</div>
         <input
           ref={inputRef}

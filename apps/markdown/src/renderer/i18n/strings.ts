@@ -7,6 +7,8 @@ export const strings = {
     redactMenuLabel: '把选中的内容对 AI 隐藏',
     redactDialogDesc:
       '这段文字会留在文档和文件里，AI 读到的却是下面的标记。给它起个名字，AI 才知道它是什么。',
+    redactDialogScope:
+      '这只针对本应用的 AI。命令行、MCP 工具和无界面导出会直接读取文件，仍然看得到这些文字。',
     redactDialogPlaceholder: '占位名称，例如：客户电话',
     redactCancel: '取消',
     redactInsert: '隐藏',
@@ -222,6 +224,8 @@ export const strings = {
     redactMenuLabel: 'Hide the selection from AI',
     redactDialogDesc:
       'The words stay in the document and in the file; the model sees the placeholder below instead. Name it so the model knows what it stands for.',
+    redactDialogScope:
+      "Hiding covers this app's AI. The CLI, MCP tools and headless export read the file directly, and they still see these words.",
     redactDialogPlaceholder: 'Placeholder name, e.g. client phone',
     redactCancel: 'Cancel',
     redactInsert: 'Hide',
@@ -443,6 +447,8 @@ export const strings = {
     redactMenuLabel: 'Ẩn phần đã chọn khỏi AI',
     redactDialogDesc:
       'Văn bản vẫn còn trong tài liệu và tệp; mô hình chỉ thấy placeholder bên dưới. Đặt tên để mô hình biết nó đại diện cho điều gì.',
+    redactDialogScope:
+      'Ẩn giấu chỉ áp dụng cho AI trong ứng dụng này. Dòng lệnh, các công cụ MCP và bản xuất không có cửa sổ đều đọc thẳng tệp, nên chúng vẫn thấy những từ này.',
     redactDialogPlaceholder: 'Tên placeholder, ví dụ: số điện thoại khách hàng',
     redactCancel: 'Hủy',
     redactInsert: 'Ẩn',
@@ -662,6 +668,8 @@ export const strings = {
     redactMenuLabel: '選択範囲をAIから隠す',
     redactDialogDesc:
       '文章はドキュメントとファイルに残り、AI には下のマーカーしか見えません。名前をつけると、何を表すかAIが理解できます。',
+    redactDialogScope:
+      '非表示の範囲はこのアプリのAIだけです。コマンドライン、MCPツール、GUIなしのエクスポートはファイルを直接読み込むため、これらの文字はまだ見えています。',
     redactDialogPlaceholder: 'プレースホルダー名（例：顧客電話）',
     redactCancel: 'キャンセル',
     redactInsert: '隠す',
@@ -881,6 +889,8 @@ export const strings = {
     redactMenuLabel: '선택한 부분을 AI에서 숨기기',
     redactDialogDesc:
       '문서는 그대로 두고 AI에게는 아래 자리표시자만 보냅니다. 이름을 붙이면 AI가 무엇을 뜻하는지 알 수 있습니다.',
+    redactDialogScope:
+      '가리기는 이 앱의 AI에만 적용됩니다. 명령줄, MCP 도구, 창 없는 내보내기는 파일을 직접 읽으므로 이 단어들은 여전히 보입니다.',
     redactDialogPlaceholder: '자리표시자 이름, 예: 고객 전화',
     redactCancel: '취소',
     redactInsert: '숨기기',
@@ -1101,6 +1111,8 @@ export const strings = {
     redactMenuLabel: 'Masquer la sélection à l’IA',
     redactDialogDesc:
       'Les mots restent dans le document et dans le fichier ; le modèle ne voit que le marqueur ci-dessous. Donnez-lui un nom pour qu’il sache ce qu’il désigne.',
+    redactDialogScope:
+      'Le masquage concerne l’IA de cette application. La ligne de commande, les outils MCP et l’export sans interface lisent le fichier directement et voient toujours ces mots.',
     redactDialogPlaceholder: 'Nom du placeholder, ex. : téléphone du client',
     redactCancel: 'Annuler',
     redactInsert: 'Masquer',
@@ -1327,6 +1339,8 @@ export const strings = {
     redactMenuLabel: 'Auswahl vor der KI verbergen',
     redactDialogDesc:
       'Die Wörter bleiben im Dokument und in der Datei; das Modell sieht nur den Platzhalter. Geben Sie ihm einen Namen.',
+    redactDialogScope:
+      'Das Ausblenden gilt für die KI in dieser Anwendung. Die Kommandozeile, die MCP-Werkzeuge und der Headless-Export lesen die Datei direkt und sehen diese Wörter weiterhin.',
     redactDialogPlaceholder: 'Name des Platzhalters, z. B. Telefonnummer des Kunden',
     redactCancel: 'Abbrechen',
     redactInsert: 'Verbergen',
@@ -1551,6 +1565,8 @@ export const strings = {
     redactMenuLabel: 'Ocultar la selección a la IA',
     redactDialogDesc:
       'Las palabras siguen en el documento y en el archivo; el modelo solo ve el marcador. Ponle un nombre para que sepa qué representa.',
+    redactDialogScope:
+      'Ocultar afecta a la IA de esta aplicación. La línea de comandos, las herramientas MCP y la exportación sin interfaz leen el archivo directamente y siguen viendo estas palabras.',
     redactDialogPlaceholder: 'Nombre del marcador, p. ej.: teléfono del cliente',
     redactCancel: 'Cancelar',
     redactInsert: 'Ocultar',
@@ -1776,6 +1792,8 @@ export const strings = {
     redactMenuLabel: 'ซ่อนส่วนที่เลือกจาก AI',
     redactDialogDesc:
       'ข้อความยังอยู่ในเอกสารและไฟล์ แต่ AI จะเห็นเพียงตัวแทนด้านล่าง ตั้งชื่อเพื่อให้ AI รู้ว่าแทนอะไร',
+    redactDialogScope:
+      'การซ่อนครอบคลุมเฉพาะ AI ในแอปนี้ บรรทัดคำสั่ง เครื่องมือ MCP และการส่งออกแบบไม่มีหน้าต่างจะอ่านไฟล์โดยตรง และยังเห็นคำเหล่านี้อยู่',
     redactDialogPlaceholder: 'ชื่อตัวแทน เช่น เบอร์โทรศัพท์ลูกค้า',
     redactCancel: 'ยกเลิก',
     redactInsert: 'ซ่อน',
@@ -1993,6 +2011,8 @@ export const strings = {
     redactMenuLabel: 'Sembunyikan pilihan dari AI',
     redactDialogDesc:
       'Kata-kata tetap ada di dokumen dan berkas; model hanya melihat placeholder di bawah. Beri nama agar model tahu apa yang diwakili.',
+    redactDialogScope:
+      'Penyembunyian ini berlaku untuk AI di aplikasi ini. Baris perintah, alat MCP, dan ekspor tanpa antarmuka membaca file secara langsung, sehingga kata-kata ini tetap terlihat olehnya.',
     redactDialogPlaceholder: 'Nama placeholder, mis. telepon pelanggan',
     redactCancel: 'Batal',
     redactInsert: 'Sembunyikan',
@@ -2213,6 +2233,8 @@ export const strings = {
     redactMenuLabel: 'Скрыть выделение от ИИ',
     redactDialogDesc:
       'Слова остаются в документе и в файле, а модель видит только метку. Дайте ей имя, чтобы было понятно, что она обозначает.',
+    redactDialogScope:
+      'Скрытие относится только к ИИ в этом приложении. Командная строка, инструменты MCP и экспорт без интерфейса читают файл напрямую и по-прежнему видят эти слова.',
     redactDialogPlaceholder: 'Имя метки, напр. телефон клиента',
     redactCancel: 'Отмена',
     redactInsert: 'Скрыть',
@@ -2434,6 +2456,8 @@ export const strings = {
     redactMenuLabel: 'إخفاء التحديد عن الذكاء الاصطناعي',
     redactDialogDesc:
       'تبقى الكلمات في المستند وفي الملف؛ يرى النموذج العلامة أدناه. سمِّها ليعرف ما تمثّله.',
+    redactDialogScope:
+      'يشمل الإخفاء ذكاء هذا التطبيق فقط. يقرأ سطر الأوامر وأدوات MCP والتصدير بدون واجهة الملف مباشرةً، وما زالت هذه الكلمات ظاهرة لها.',
     redactDialogPlaceholder: 'اسم العنصر، مثال: هاتف العميل',
     redactCancel: 'إلغاء',
     redactInsert: 'إخفاء',
@@ -2651,6 +2675,8 @@ export const strings = {
     redactMenuLabel: 'Ocultar a seleção da IA',
     redactDialogDesc:
       'As palavras continuam no documento e no arquivo; o modelo vê apenas o marcador. Dê-lhe um nome para que saiba o que representa.',
+    redactDialogScope:
+      'Ocultar aplica-se apenas à IA deste aplicativo. A linha de comando, as ferramentas MCP e a exportação sem interface leem o arquivo diretamente e ainda veem estas palavras.',
     redactDialogPlaceholder: 'Nome do marcador, ex.: telefone do cliente',
     redactCancel: 'Cancelar',
     redactInsert: 'Ocultar',
@@ -2874,6 +2900,8 @@ export const strings = {
     redactMenuLabel: 'Nascondi la selezione all’IA',
     redactDialogDesc:
       'Le parole restano nel documento e nel file; il modello vede solo il segnaposto. Dai un nome perché sappia cosa rappresenta.',
+    redactDialogScope:
+      'La mascheratura riguarda l’IA di questa app. La riga di comando, gli strumenti MCP e l’esportazione senza interfaccia leggono il file direttamente e vedono ancora queste parole.',
     redactDialogPlaceholder: 'Nome del segnaposto, es. telefono del cliente',
     redactCancel: 'Annulla',
     redactInsert: 'Nascondi',
@@ -3097,6 +3125,8 @@ export const strings = {
     redactMenuLabel: 'Ukryj zaznaczenie przed AI',
     redactDialogDesc:
       'Słowa zostają w dokumencie i w pliku; model widzi tylko symbol. Nadaj mu nazwę, by wiedział, co oznacza.',
+    redactDialogScope:
+      'Ukrywanie dotyczy tylko AI w tej aplikacji. Wiersz poleceń, narzędzia MCP i eksport bez okienka czytają plik bezpośrednio i nadal widzą te słowa.',
     redactDialogPlaceholder: 'Nazwa symbolu, np. telefon klienta',
     redactCancel: 'Anuluj',
     redactInsert: 'Ukryj',
@@ -3318,6 +3348,8 @@ export const strings = {
     redactMenuLabel: 'Skrýt výběr před AI',
     redactDialogDesc:
       'Slova zůstanou v dokumentu i v souboru; model uvidí jen zástupný symbol. Pojmenujte ho, aby věděl, co zastupuje.',
+    redactDialogScope:
+      'Skrytí se týká AI v této aplikaci. Nástroj příkazové řádky, nástroje MCP a export bez rozhraní čtou soubor přímo, a tyto texty tedy stále vidí.',
     redactDialogPlaceholder: 'Název zástupného symbolu, např. telefon zákazníka',
     redactCancel: 'Zrušit',
     redactInsert: 'Skrýt',
@@ -3538,6 +3570,8 @@ export const strings = {
     redactMenuLabel: 'Selectie verbergen voor de AI',
     redactDialogDesc:
       'De woorden blijven in het document en het bestand; het model ziet alleen de placeholder. Geef hem een naam.',
+    redactDialogScope:
+      'Verbergen geldt voor de AI in deze app. De opdrachtregel, de MCP-tools en de export zonder venster lezen het bestand rechtstreeks en zien deze woorden nog steeds.',
     redactDialogPlaceholder: 'Naam van placeholder, bv. telefoonnummer klant',
     redactCancel: 'Annuleren',
     redactInsert: 'Verbergen',
@@ -3760,6 +3794,8 @@ export const strings = {
     redactMenuLabel: 'Sembunyikan pilihan daripada AI',
     redactDialogDesc:
       'Perkataan kekal dalam dokumen dan fail; model hanya melihat placeholder di bawah. Beri nama supaya model tahu apa yang diwakili.',
+    redactDialogScope:
+      'Penyembunyian ini hanya untuk AI dalam aplikasi ini. Baris arahan, alat MCP dan eksport tanpa antara muka membaca fail secara terus, jadi perkataan ini masih kelihatan kepada mereka.',
     redactDialogPlaceholder: 'Nama placeholder, cth. telefon pelanggan',
     redactCancel: 'Batal',
     redactInsert: 'Sembunyikan',
@@ -3980,6 +4016,8 @@ export const strings = {
     redactMenuLabel: 'הסתרת הבחירה מהמודל',
     redactDialogDesc:
       'המילים נשארות במסמך ובקובץ; המודל רואה רק את הסימון. תן לו שם כדי שיהיה ברור מה הוא מייצג.',
+    redactDialogScope:
+      'ההסתרה חלה על הבינה המלאכותית של היישום הזה. שורת הפקודה, כלי ה-MCP והייצוא ללא ממשק קוראים את הקובץ ישירות ועדיין רואים את המילים האלה.',
     redactDialogPlaceholder: 'שם הסימון, לדוגמה: טלפון הלקוח',
     redactCancel: 'ביטול',
     redactInsert: 'הסתר',
@@ -4196,6 +4234,8 @@ export const strings = {
     redactMenuLabel: 'चयन को AI से छिपाएँ',
     redactDialogDesc:
       'शब्द दस्तावेज़ और फ़ाइल में बने रहते हैं; मॉडल को केवल नीचे वाला प्लेसहोल्डर दिखता है। नाम दें ताकि उसे पता चले कि यह किसका स्थान है।',
+    redactDialogScope:
+      'यह छिपाना इस ऐप के AI पर लागू होता है। कमांड लाइन, MCP टूल और बिना विंडो वाला एक्सपोर्ट फ़ाइल को सीधे पढ़ते हैं, इसलिए उन्हें ये शब्द फिर भी दिखते हैं।',
     redactDialogPlaceholder: 'प्लेसहोल्डर का नाम, जैसे ग्राहक का फ़ोन',
     redactCancel: 'रद्द करें',
     redactInsert: 'छिपाएँ',
@@ -4416,6 +4456,8 @@ export const strings = {
     redactMenuLabel: '把選中的內容對 AI 隱藏',
     redactDialogDesc:
       '這段文字會留在文件裡，AI 讀到的卻是下面的標記。給它起個名字，AI 才知道它是什麼。',
+    redactDialogScope:
+      '這只針對本應用的 AI。命令列、MCP 工具和無介面匯出會直接讀取檔案，仍然看得到這些文字。',
     redactDialogPlaceholder: '佔位名稱，例如：客戶電話',
     redactCancel: '取消',
     redactInsert: '隱藏',

@@ -56,6 +56,8 @@ export function RedactDialog({ seed, onSubmit, onCancel }: Props) {
           {t('redactMenuLabel')}
         </h2>
         <p className="redact-dialog-desc">{t('redactDialogDesc')}</p>
+        {/* the claim above is about this app's AI; the file still has the words */}
+        <p className="redact-dialog-scope">{t('redactDialogScope')}</p>
         <div className="redact-dialog-preview" aria-live="polite">
           {placeholderSource(label)}
         </div>

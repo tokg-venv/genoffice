@@ -55,6 +55,8 @@ export function RedactDialog({ seed, rangeLabel, onSubmit, onCancel }: Props) {
         <h2>{t('redactMenuLabel')}</h2>
         <label className="redact-dialog-desc" htmlFor="gx-redact-label">
           {t('redactDialogDesc')}
+          {/* the claim above is about this app's AI; the file still has the words */}
+          <p className="redact-dialog-scope">{t('redactDialogScope')}</p>
         </label>
         <p className="redact-dialog-range">{rangeLabel}</p>
         <div className="redact-dialog-preview" aria-live="polite">

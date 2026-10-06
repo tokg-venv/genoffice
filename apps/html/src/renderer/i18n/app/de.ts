@@ -4,6 +4,8 @@ export const de = {
   redactMenuLabel: 'Auswahl vor der KI verbergen',
   redactDialogDesc:
     'Die Wörter bleiben im Dokument und in der Datei; das Modell sieht nur den Platzhalter. Geben Sie ihm einen Namen.',
+  redactDialogScope:
+    'Das Verbergen gilt nur für die KI dieser App. CLI, MCP-Tools und der Headless-Export lesen die Datei direkt und sehen diese Wörter weiterhin.',
   redactDialogPlaceholder: 'Name des Platzhalters, z. B. Telefonnummer des Kunden',
   redactCancel: 'Abbrechen',
   redactInsert: 'Verbergen',

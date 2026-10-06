@@ -37,6 +37,8 @@ export function RedactDialog({ seed, onSubmit, onCancel }: Props) {
       <div className="modal" {...dialogProps} onClick={(e) => e.stopPropagation()}>
         <h2 id={titleId}>{t('redactMenuLabel')}</h2>
         <p className="modal-note">{t('redactDialogDesc')}</p>
+        {/* the claim above is about this app's AI; the file still has the words */}
+        <p className="modal-note">{t('redactDialogScope')}</p>
         <div className="redact-preview" aria-live="polite">
           {placeholderSource(label)}
         </div>
