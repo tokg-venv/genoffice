@@ -1,5 +1,5 @@
 import JSZip from 'jszip'
-import { REDACT_EL, REDACT_NS, REDACT_PREFIX } from '@genoffice/pptx-engine'
+import { REDACT_EL, REDACT_NS, REDACT_PREFIX } from '@genoffice/agent-core/redact-range'
 import {
   applyImageWrap,
   generateParagraphXml,

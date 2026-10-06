@@ -47,22 +47,11 @@ import { asXmlNode, escapeXmlAttr, xmlArray, type XmlNode } from './xml-utils'
  * GUID identifying the extension's schema, so it must be stable: a deck that
  * round-trips through this engine has to land on the same value.
  */
-export const REDACT_EXT_URI = '{9F1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D}'
+export { REDACT_EL, REDACT_NS, REDACT_PREFIX } from '@genoffice/agent-core/redact-range'
 
-/**
- * The namespace the label lives in, and the prefix bound to it.
- *
- * An undeclared prefix is a parse error, not a warning: PowerPoint offers to
- * repair the deck and repair drops the run carrying the mark, which hands the
- * span back to the model on the next open.
- *
- * Defined here rather than in the docx carrier because `docx-engine` depends on
- * this package and not the other way round, so this is the one place both can
- * reach without either reaching sideways.
- */
-export const REDACT_NS = 'https://genspark.ai/genoffice/redaction/2026'
-export const REDACT_PREFIX = 'go'
-export const REDACT_EL = `${REDACT_PREFIX}:redact`
+import { REDACT_EL, REDACT_NS, REDACT_PREFIX } from '@genoffice/agent-core/redact-range'
+
+export const REDACT_EXT_URI = '{9F1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D}'
 
 /**
  * The whole extension node, for splicing into an `<a:extLst>`.

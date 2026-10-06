@@ -175,3 +175,20 @@ function walkInline(
     pos = start + size(child)
   }
 }
+
+/**
+ * The namespace the "withheld from the model" label lives in, and the prefix
+ * bound to it.
+ *
+ * Both file carriers write into it — a `go:redact` element in a docx run's rPr
+ * and the same element inside a pptx `<a:ext>` — and an undeclared prefix is a
+ * parse error rather than a warning: Word and PowerPoint both offer to repair
+ * the file, and repair drops the run carrying the mark, so the span quietly
+ * becomes readable by a model again on the next open.
+ *
+ * It lives here rather than in either engine because the two of them need it,
+ * and a per-app stack has to build with only the core and one app present.
+ */
+export const REDACT_NS = 'https://genspark.ai/genoffice/redaction/2026'
+export const REDACT_PREFIX = 'go'
+export const REDACT_EL = `${REDACT_PREFIX}:redact`

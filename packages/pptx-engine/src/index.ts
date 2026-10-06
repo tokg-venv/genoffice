@@ -96,10 +96,7 @@ import { cleanupSupersededSlideResources, removePartWithOwnedResources } from '.
 
 export * from './types'
 export {
-  REDACT_EL,
   REDACT_EXT_URI,
-  REDACT_NS,
-  REDACT_PREFIX,
   hasRedactExtIn,
   readRedactLabel,
   redactExtXml,

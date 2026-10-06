@@ -1,6 +1,11 @@
 /**
  * @vitest-environment jsdom
  */
+/// <reference lib="dom" />
+// The package's own tsconfig deliberately omits the DOM lib — it is a headless
+// engine — so the two globals this file needs are pulled in here rather than by
+// changing what the package compiles against.
+
 import { describe, expect, it } from 'vitest'
 import { REDACT_NS, REDACT_PREFIX, redactExtXml, setRedactExt } from '../src/redaction-xml'
 
