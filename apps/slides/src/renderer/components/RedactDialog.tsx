@@ -7,9 +7,8 @@
  * the model ever sees in place of the words, so the reader should know exactly
  * what is about to be exposed before committing.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useRedactLabelField } from '@genoffice/ui'
 import { useModalDialog } from './modal-dialog'
-import { MAX_LABEL_LENGTH, placeholderSource, sanitizeLabel } from '../ai/redact'
 import { useI18n } from '../i18n/locale'
 
 interface Props {
@@ -21,14 +20,10 @@ interface Props {
 
 export function RedactDialog({ seed, onSubmit, onCancel }: Props) {
   const { t } = useI18n()
+  const field = useRedactLabelField(seed, onSubmit, onCancel)
   const { titleId, dialogProps } = useModalDialog(onCancel)
-  const [value, setValue] = useState(seed)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   // The seed is a starting point to replace, not a default to keep
-  useEffect(() => inputRef.current?.select(), [])
-
-  const label = sanitizeLabel(value)
 
   return (
     // data-keep-edit: opening over a live text edit must not commit it — the mark applies to
@@ -40,25 +35,25 @@ export function RedactDialog({ seed, onSubmit, onCancel }: Props) {
         {/* the claim above is about this app's AI; the file still has the words */}
         <p className="modal-note">{t('redactDialogScope')}</p>
         <div className="redact-preview" aria-live="polite">
-          {placeholderSource(label)}
+          {field.marker}
         </div>
         <input
-          ref={inputRef}
+          ref={field.inputRef}
           type="text"
-          value={value}
-          maxLength={MAX_LABEL_LENGTH}
+          value={field.value}
+          maxLength={field.maxLength}
           placeholder={t('redactDialogPlaceholder')}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => field.setValue(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && label) {
+            if (e.key === 'Enter' && field.label) {
               e.preventDefault()
-              onSubmit(label)
+              onSubmit(field.label)
             }
           }}
         />
         <div className="modal-actions">
           <button onClick={onCancel}>{t('redactCancel')}</button>
-          <button className="primary" disabled={!label} onClick={() => onSubmit(label)}>
+          <button className="primary" disabled={field.empty} onClick={() => onSubmit(field.label)}>
             {t('redactInsert')}
           </button>
         </div>

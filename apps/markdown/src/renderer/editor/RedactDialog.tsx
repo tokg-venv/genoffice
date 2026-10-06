@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRedactLabelField } from '@genoffice/ui'
 import { useI18n } from '../i18n/locale'
-import { MAX_LABEL_LENGTH, placeholderSource, sanitizeLabel } from './redact'
 
 interface Props {
   /** the text the span covers, offered as a starting label */
@@ -16,15 +15,7 @@ interface Props {
  */
 export function RedactDialog({ seed, onSubmit, onCancel }: Props) {
   const { t } = useI18n()
-  const [value, setValue] = useState(seed)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    inputRef.current?.focus()
-    inputRef.current?.select()
-  }, [])
-
-  const label = sanitizeLabel(value)
+  const field = useRedactLabelField(seed, onSubmit, onCancel)
 
   return (
     <div
@@ -44,18 +35,18 @@ export function RedactDialog({ seed, onSubmit, onCancel }: Props) {
         <p className="redact-dialog-desc">{t('redactDialogDesc')}</p>
         {/* the claim above is about this app's AI; the file still has the words */}
         <p className="redact-dialog-scope">{t('redactDialogScope')}</p>
-        <div className="redact-dialog-preview">{placeholderSource(label)}</div>
+        <div className="redact-dialog-preview">{field.marker}</div>
         <input
-          ref={inputRef}
+          ref={field.inputRef}
           className="redact-dialog-input"
-          value={value}
-          maxLength={MAX_LABEL_LENGTH}
+          value={field.value}
+          maxLength={field.maxLength}
           placeholder={t('redactDialogPlaceholder')}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => field.setValue(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && label) {
+            if (e.key === 'Enter' && field.label) {
               e.preventDefault()
-              onSubmit(label)
+              onSubmit(field.label)
             } else if (e.key === 'Escape') {
               e.preventDefault()
               onCancel()
@@ -69,8 +60,8 @@ export function RedactDialog({ seed, onSubmit, onCancel }: Props) {
           <button
             type="button"
             className="redact-dialog-btn primary"
-            disabled={!label}
-            onClick={() => onSubmit(label)}
+            disabled={field.empty}
+            onClick={() => onSubmit(field.label)}
           >
             {t('redactInsert')}
           </button>
