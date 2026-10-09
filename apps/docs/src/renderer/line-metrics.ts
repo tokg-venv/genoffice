@@ -699,8 +699,13 @@ export function isFontAvailable(font: string): boolean {
  */
 const chainMetricsCache = new Map<string, { ascentPct: number; descentPct: number } | null>()
 
-/** embedded faces registered/revoked: their availability and every chain's metrics may have flipped */
-export function noteEmbeddedFontsChanged(families: readonly string[]): void {
+/**
+ * Faces registered or revoked — from the document's own embedded fonts, or from
+ * the downloadable store. Either way a family's availability and every chain's
+ * metrics may have flipped, and both caches are keyed on names that just became
+ * wrong.
+ */
+export function noteFontFacesChanged(families: readonly string[]): void {
   for (const f of families) fontAvailableCache.delete(f)
   chainMetricsCache.clear()
 }

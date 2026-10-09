@@ -66,6 +66,14 @@ export {
   systemFamiliesBesidesCandidates,
 } from './font-list'
 export {
+  formatFontBytes,
+  offerableRows,
+  useFontCatalog,
+  type FontCatalogApi,
+  type FontCatalogRow,
+  type UseFontCatalog,
+} from './font-catalog'
+export {
   WORDART_PRESETS,
   wordArtSolidColor,
   wordArtStrokePx,

@@ -1,11 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import type { Selection, Transaction } from '@tiptap/pm/state'
-import { Dropdown, isSymbolFontFamily, type DropdownOption } from '@genoffice/ui'
+import {
+  Dropdown,
+  formatFontBytes,
+  isSymbolFontFamily,
+  offerableRows,
+  useFontCatalog,
+  type DropdownOption,
+  type FontCatalogApi,
+  type FontCatalogRow,
+} from '@genoffice/ui'
 import { useI18n, type StringKey } from '../i18n/locale'
 import { fontFamiliesFor, systemFamiliesBesidesCandidates } from '../font-list'
 import { fontSizeLabel, fontSizeOptions, parseFontSize } from '../font-sizes'
 import { useSystemFontFamilies } from '../system-fonts'
+import { downloadAndRegister, useStoreFontFamilies } from '../store-fonts'
 import { charScaleEm, cssFontFamily, wordKerns } from '../line-metrics'
 import { useModalKeys } from './modal-keys'
 
@@ -167,6 +177,36 @@ export function fontTabAttrs(
   return out
 }
 
+/**
+ * Which rFonts slot a downloaded family belongs in.
+ *
+ * The same split `isEastAsianFontName` makes by guessing at a name, except the
+ * catalog has already answered it: Latin families take the Latin slot, every
+ * CJK script the East Asian one. Putting Noto Sans SC in w:ascii would make it
+ * win the Latin slot and leave Chinese text on the old family — the exact
+ * clobbering the two-slot split exists to prevent.
+ */
+export function catalogFontSlot(row: Pick<FontCatalogRow, 'script'>): 'fontLatin' | 'fontEastAsia' {
+  return row.script === 'latin' ? 'fontLatin' : 'fontEastAsia'
+}
+
+/**
+ * Families the two pickers may offer beyond the built-in candidates: the
+ * machine's own, plus every family downloaded and registered this session.
+ *
+ * Deduped before it reaches the shared helper, which only filters out the
+ * candidates: a family that is both installed on the machine and in the store
+ * appears in both lists, and concatenating them would list it twice in the
+ * dropdown.
+ */
+export function availableFontFamilies(
+  candidates: readonly string[],
+  system: readonly string[],
+  store: readonly string[],
+): readonly string[] {
+  return systemFamiliesBesidesCandidates(candidates, [...new Set([...system, ...store])])
+}
+
 export function FontDialog({ editor, onClose }: { editor: Editor; onClose: () => void }) {
   const { t, lang } = useI18n()
   const modalKeys = useModalKeys(onClose)
@@ -175,9 +215,38 @@ export function FontDialog({ editor, onClose }: { editor: Editor; onClose: () =>
   const { families: allSystemFontFamilies, load: loadSystemFonts } = useSystemFontFamilies()
   // the dialog opens from a click, so activation is still live here
   useEffect(() => loadSystemFonts(), [loadSystemFonts])
+  const storeFamilies = useStoreFontFamilies()
+  // The main process can only report what sits in the store; a family the machine
+  // already has is folded in here, because queryLocalFonts is the only thing that
+  // can answer it. Without the fold the section would offer a 28 MiB download of
+  // a font the reader is already using. Memoised because the shared hook refetches
+  // whenever its api identity changes, and this closure is a fresh object per
+  // render otherwise.
+  const catalogApi = useMemo<FontCatalogApi>(
+    () => ({
+      fontCatalog: async () => {
+        const rows = (await window.desktop?.fontCatalog?.()) ?? []
+        const local = new Set(allSystemFontFamilies)
+        return rows.map((row) => (local.has(row.family) ? { ...row, installed: true } : row))
+      },
+      fontDownload: downloadAndRegister,
+    }),
+    [allSystemFontFamilies],
+  )
+  const {
+    rows: catalogRows,
+    busy: fontBusy,
+    failed: fontFailed,
+    download: downloadFont,
+  } = useFontCatalog(catalogApi)
+  const offerable = offerableRows(catalogRows)
   // every candidate stays listed (the machine may genuinely lack some), so the
   // system section is the candidates-deduped remainder: no builtin is listed twice
-  const systemFontFamilies = systemFamiliesBesidesCandidates(fontFamilies, allSystemFontFamilies)
+  const systemFontFamilies = availableFontFamilies(
+    fontFamilies,
+    allSystemFontFamilies,
+    storeFamilies,
+  )
   const textAttrs = editor.getAttributes('docTextStyle')
   const initialStyle = editor.isActive('bold')
     ? editor.isActive('italic')
@@ -259,6 +328,20 @@ export function FontDialog({ editor, onClose }: { editor: Editor; onClose: () =>
     if (touched.has('strike')) chain = strike ? chain.setMark('strike') : chain.unsetMark('strike')
     chain.run()
     onClose()
+  }
+
+  /**
+   * Fetch a family, then pick it. The row stays a download button rather than a
+   * font option: this is a 28 MiB fetch, and a dropdown entry that silently
+   * starts one is the failure the shared store refuses to decide for us.
+   * Selecting it afterwards is not a surprise — the reader clicked that family.
+   */
+  const takeFont = (row: FontCatalogRow) => {
+    void downloadFont(row.family).then((ok) => {
+      if (!ok) return
+      if (catalogFontSlot(row) === 'fontLatin') field('fontLatin', setFontLatin)(row.family)
+      else field('fontEastAsia', setFontEastAsia)(row.family)
+    })
   }
 
   const fontPicker = (value: string, onPick: (v: string) => void, label: string) => (
@@ -395,6 +478,36 @@ export function FontDialog({ editor, onClose }: { editor: Editor; onClose: () =>
           touch('hidden')
         })}
       </div>
+      {/* Nothing at all when the build ships no mirror: an empty "Downloadable
+          fonts" heading would be a section that can never do anything. */}
+      {offerable.length > 0 && (
+        <div className="font-download">
+          <div className="font-download-head">{t('ribbonFontsDownloadable')}</div>
+          {offerable.map((row) => (
+            <button
+              key={row.family}
+              type="button"
+              className="font-download-row"
+              disabled={fontBusy.has(row.family)}
+              onClick={() => takeFont(row)}
+            >
+              {/* rendered in the UI font, not its own: it is not installed yet,
+                  so its own name would come back in a substitute face */}
+              <span className="font-download-name">{row.family}</span>
+              <span className="font-download-meta">
+                {formatFontBytes(row.bytes)} · {row.license}
+              </span>
+              <span className="font-download-state">
+                {fontBusy.has(row.family)
+                  ? t('ribbonFontDownloading')
+                  : fontFailed.has(row.family)
+                    ? t('ribbonFontDownloadFailed')
+                    : '⤓'}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </>
   )
 

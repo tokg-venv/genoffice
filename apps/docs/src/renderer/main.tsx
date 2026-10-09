@@ -2,7 +2,7 @@ import { createRoot } from 'react-dom/client'
 import { htmlLang, type Lang } from '@genoffice/i18n'
 import { App } from './App'
 import { LocaleProvider, setModuleLang } from './i18n/locale'
-import type { UiTheme } from '../shared/ipc'
+import type { DocTheme, UiTheme } from '../shared/ipc'
 import '@genoffice/ui/tokens.css'
 import '@genoffice/ui/screentip.css'
 import '@genoffice/ui/color-picker.css'
@@ -16,6 +16,7 @@ import './styles.css'
 import './fonts/fonts.css'
 import { applyAiPanelPrefs, installScreenTips } from '@genoffice/ui'
 import { setAltChunkHtmlConverter } from '@genoffice/docx-engine'
+import { registerStoredFamilies } from './store-fonts'
 
 installScreenTips()
 if (window.desktop?.convertAltChunkHtml) {
@@ -27,15 +28,23 @@ function applyTheme(theme: UiTheme): void {
   else document.documentElement.setAttribute('data-theme', theme)
 }
 
+function applyDocumentTheme(theme: DocTheme): void {
+  // data-doc-theme drives the canvas/paper (#1811); absent means 'follow' the UI theme
+  if (theme === 'follow') document.documentElement.removeAttribute('data-doc-theme')
+  else document.documentElement.setAttribute('data-doc-theme', theme)
+}
+
 async function bootstrap(): Promise<void> {
   let lang: Lang = 'zh'
   let theme: UiTheme = 'system'
+  let docTheme: DocTheme = 'follow'
   try {
     // per-promise catch: standalone runs have no app:get-theme handler, and
     // that rejection must not drop a resolved language
-    ;[lang, theme] = await Promise.all([
+    ;[lang, theme, docTheme] = await Promise.all([
       window.desktop.getLanguage().catch(() => 'zh' as const),
       window.desktop.getTheme().catch(() => 'system' as const),
+      window.desktop.getDocumentTheme?.().catch(() => 'follow' as const),
     ])
   } catch {
     /* dev renderer without the preload bridge */
@@ -43,12 +52,21 @@ async function bootstrap(): Promise<void> {
   setModuleLang(lang)
   document.documentElement.lang = htmlLang(lang)
   applyTheme(theme)
+  applyDocumentTheme(docTheme ?? 'follow')
   window.desktop?.onThemeChanged(applyTheme)
+  window.desktop?.onDocumentThemeChanged?.(applyDocumentTheme)
   await window.desktop
     ?.getAiPanelPrefs?.()
     .then(applyAiPanelPrefs)
     .catch(() => {})
   window.desktop?.onAiPanelPrefsChanged?.(applyAiPanelPrefs)
+  // Families downloaded in an earlier session are files on disk and nothing
+  // else: this window has to register them as faces before they render, or a
+  // document already using one falls back until something forces a repaint.
+  // Deliberately not awaited — a 28 MiB family must not hold up first paint, and
+  // each registration dispatches `loadingdone`, so whatever measured in the
+  // meantime re-measures itself once the faces land.
+  void registerStoredFamilies()
   createRoot(document.getElementById('root')!).render(
     <LocaleProvider initial={lang}>
       <App />
