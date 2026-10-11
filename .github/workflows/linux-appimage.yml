@@ -1,0 +1,59 @@
+name: linux-appimage
+
+# Not part of the PR. genoffice#1913 asked for a package he could run on his
+# Ubuntu box (no Rust, no room for the toolchain), and the linux electron-builder
+# target takes the sheets sidecar from `cargo target/release/` — the host's own
+# platform — so an AppImage has to be built on Linux. This runs on the fork.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: branch to package
+        required: false
+        default: feat/ui-scale
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref_name }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable, 2026-07
+        with:
+          toolchain: stable
+
+      - name: Install
+        run: npm ci
+
+      - name: Build the sheets native sidecar
+        # electron-builder's linux target copies this from target/release, and
+        # it has to be a Linux ELF — hence this whole job running on Linux.
+        run: npm run native:build -w @genoffice/sheets
+
+      - name: Build every renderer
+        run: npm run build:all
+
+      - name: Package AppImage
+        run: npm run dist:linux -w @genoffice/shell
+
+      - name: Report what landed
+        run: ls -la apps/shell/dist/ 2>/dev/null | grep -i appimage || ls -la apps/shell/dist/
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: genoffice-appimage
+          path: apps/shell/dist/*.AppImage
+          if-no-files-found: error
+          retention-days: 30
