@@ -48,9 +48,6 @@ jobs:
       - name: Package AppImage
         run: npm run dist:linux -w @genoffice/shell
 
-      - name: Report what landed
-        run: ls -la apps/shell/dist/ 2>/dev/null | grep -i appimage || ls -la apps/shell/dist/
-
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: genoffice-appimage
