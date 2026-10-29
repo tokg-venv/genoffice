@@ -40,6 +40,10 @@ describe('openai-responses protocol', () => {
     expect(adapter.resolveEndpoint({ apiKey: 'k', model: 'gpt-5.6-luna' }).protocol).toBe(
       'openai-responses',
     )
+    // the gpt-6 family needs this endpoint for tool calling at all
+    expect(adapter.resolveEndpoint({ apiKey: 'k', model: 'gpt-6-astra' }).protocol).toBe(
+      'openai-responses',
+    )
     expect(adapter.resolveEndpoint({ apiKey: 'k', model: 'gpt-5.5' }).protocol).toBe(
       'openai-compatible',
     )

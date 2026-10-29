@@ -136,10 +136,21 @@ export const AI_PROVIDERS: AiProviderMeta[] = [
     // GPT-5.6 naming: sol is the flagship (the bare `gpt-5.6` alias resolves to
     // it, but spell it out so the picker says which tier it is), terra balances
     // cost/intelligence, luna is the high-volume tier (2026-08). The GPT-6
-    // family (astra, sol, luna) is deliberately absent: Chat Completions
-    // supports its function calling only with reasoning_effort none, full
-    // tool use needs the Responses API, which has no protocol here (2026-09-24)
-    models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'],
+    // family (astra flagship, sol, luna) was absent while this package only
+    // spoke Chat Completions — its function calling needs the Responses API
+    // (2026-09-24) — and rides that protocol now; its direct-API model ids
+    // mirror the proxy's spelling
+    models: [
+      'gpt-6-astra',
+      'gpt-6-sol',
+      'gpt-6-luna',
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+      'gpt-5.5',
+      'gpt-5.4',
+      'gpt-5.4-mini',
+    ],
     defaultModel: 'gpt-5.6-terra',
     keyPlaceholder: 'sk-...',
   },

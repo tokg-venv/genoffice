@@ -32,8 +32,10 @@ import {
  * output-capped turn ends as `response.incomplete`.
  */
 
-/** the reasoning-line models Chat Completions serves only with effort none */
-export const OPENAI_RESPONSES_MODEL_RE = /(^|\/)gpt-5\.6([-./]|$)/i
+/** the reasoning-line models whose function calling rides the Responses API
+ *  (Chat Completions serves gpt-5.6's only with effort none; the gpt-6 family
+ *  needs this endpoint for tool calling at all) */
+export const OPENAI_RESPONSES_MODEL_RE = /(^|\/)(gpt-5\.6|gpt-6)([-./]|$)/i
 
 export interface OpenAiResponsesRequestOptions {
   headers?: Record<string, string> | undefined

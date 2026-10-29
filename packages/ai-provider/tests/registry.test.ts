@@ -73,9 +73,9 @@ describe('provider registry', () => {
   })
 
   it('marks the GPT-5/GPT-6 families as fixed-sampling (reject any non-default temperature)', () => {
-    // the 5.6 family routes to the Responses API, which sends no temperature
-    // at all — the fixed-sampling property holds by construction there
-    for (const model of ['gpt-5.6', 'gpt-5.6-terra']) {
+    // the 5.6 and 6 families route to the Responses API, which sends no
+    // temperature at all — the fixed-sampling property holds by construction
+    for (const model of ['gpt-5.6', 'gpt-5.6-terra', 'gpt-6-astra']) {
       expect(AI_PROVIDER_ADAPTERS.openai.resolveEndpoint(config(model))).toEqual({
         protocol: 'openai-responses',
         baseUrl: 'https://api.openai.com/v1',
@@ -84,7 +84,7 @@ describe('provider registry', () => {
         omitTemperature: true,
       })
     }
-    for (const model of ['gpt-6-astra', 'gpt-5.5', 'gpt-5.4-mini']) {
+    for (const model of ['gpt-5.5', 'gpt-5.4-mini']) {
       expect(AI_PROVIDER_ADAPTERS.openai.resolveEndpoint(config(model))).toEqual({
         protocol: 'openai-compatible',
         baseUrl: 'https://api.openai.com/v1',
