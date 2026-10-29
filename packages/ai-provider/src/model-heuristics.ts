@@ -69,10 +69,14 @@ export function modelEchoesReasoning(model: string): boolean {
 /**
  * Chat Completions serves these families' function calling only with
  * reasoning_effort none — OpenAI's own 400 names the two options (the
- * Responses API, which has no protocol here, or effort none), so tool turns
- * pin the effort explicitly. Gated per family: gpt-5.5 and older keep
- * accepting tools beside their default reasoning (genoffice#2295).
+ * Responses API, which the direct-openai route uses for gpt-5.6, or effort
+ * none), so tool turns pin the effort explicitly. Scope, per public reports
+ * and the shipped family notes: gpt-5.6 (genoffice#2295), gpt-5.5 (same
+ * default-medium effort, same 400s reported) and the gpt-6 family (documented
+ * in providers.ts from the 2026-09-24 live verification). The Genspark proxy
+ * is exempt per endpoint: its LiteLLM backend serves gpt-6 tool calls as-is,
+ * so pinning there would change verified-working behavior.
  */
 export function modelNeedsReasoningNoneForTools(model: string): boolean {
-  return /(^|\/)gpt-5\.6([-/.]|$)/i.test(model)
+  return /(^|\/)(gpt-5\.[56]|gpt-6)([-./]|$)/i.test(model)
 }

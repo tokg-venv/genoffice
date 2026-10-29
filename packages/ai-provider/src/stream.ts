@@ -55,6 +55,7 @@ export async function streamForProvider(
           echoReasoning: endpoint.echoReasoning,
           headers: endpoint.headers,
           idleTimeoutMs: endpoint.idleTimeoutMs,
+          keepDefaultReasoningForTools: endpoint.keepDefaultReasoningForTools,
         })
     }
   })

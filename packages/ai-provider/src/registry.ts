@@ -46,6 +46,10 @@ export interface ResolvedEndpoint {
   maxTokens?: number
   /** images may be sent to this endpoint (custom: from the profile, else the heuristic) */
   vision?: boolean
+  /** tool turns keep the model's default reasoning even for the families that
+   *  normally need effort none — set where the backend already handles it
+   *  (the Genspark proxy serves gpt-6 tool calls live-verified as-is) */
+  keepDefaultReasoningForTools?: boolean
 }
 
 export interface ProviderAdapter {
@@ -137,6 +141,9 @@ export const AI_PROVIDER_ADAPTERS: Record<AiProviderId, ProviderAdapter> = {
         protocol: 'openai-compatible',
         baseUrl: GENSPARK_LLM_BASE_URLS.openai,
         ...(modelHasFixedSampling(config.model) ? { omitTemperature: true } : {}),
+        // the proxy's LiteLLM backend serves gpt-6 tool turns working as-is
+        // (live-verified 2026-09-24): the effort-none pin must not touch them
+        ...(config.model.startsWith('gpt-6') ? { keepDefaultReasoningForTools: true } : {}),
       }
     },
   },

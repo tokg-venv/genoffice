@@ -157,6 +157,9 @@ export interface OpenAiRequestOptions {
   headers?: Record<string, string> | undefined
   /** stream idle budget override for slow local servers */
   idleTimeoutMs?: number | undefined
+  /** tool turns keep the model's default reasoning even for the effort-none
+   *  families (the Genspark proxy serves gpt-6 tool calls working as-is) */
+  keepDefaultReasoningForTools?: boolean | undefined
 }
 
 const usageRejectedGateways = new Set<string>()
@@ -243,7 +246,9 @@ async function openAiCompatibleTurn(
         : {}),
       // gpt-5.6 rejects tool turns that carry its default reasoning effort;
       // the API's own 400 offers effort none as the Chat Completions way out
-      ...(tools.length > 0 && modelNeedsReasoningNoneForTools(config.model)
+      ...(tools.length > 0 &&
+      modelNeedsReasoningNoneForTools(config.model) &&
+      !options.keepDefaultReasoningForTools
         ? { reasoning_effort: 'none' as const }
         : {}),
       ...(options.omitTemperature ? {} : { temperature: 0.3 }),
