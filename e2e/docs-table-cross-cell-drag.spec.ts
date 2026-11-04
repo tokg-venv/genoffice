@@ -49,24 +49,49 @@ interface DragProbe {
   endCell: number
 }
 
+/**
+ * A point on the first (or last) character of the cell's text, from the
+ * rendered glyph box itself — a cell's geometric middle sits in the empty
+ * space right of a short word, where no text character lives.
+ */
+function textPoint(page: import('@playwright/test').Page, at: 'first' | 'last') {
+  return page.evaluate((where) => {
+    const cells = document.querySelectorAll('.doc-page table.doc-table td')
+    const td = (where === 'first' ? cells[0] : cells[cells.length - 1]) as HTMLTableCellElement
+    const walker = document.createTreeWalker(td, NodeFilter.SHOW_TEXT)
+    const text = walker.nextNode()
+    if (!text) throw new Error('cell has no text node')
+    const length = text.textContent?.length ?? 0
+    const range = document.createRange()
+    if (where === 'first') {
+      range.setStart(text, 0)
+      range.setEnd(text, 1)
+    } else {
+      range.setStart(text, Math.max(0, length - 1))
+      range.setEnd(text, length)
+    }
+    const box = range.getBoundingClientRect()
+    return where === 'first'
+      ? { x: box.left + 1, y: box.top + box.height / 2 }
+      : { x: box.right - 1, y: box.top + box.height / 2 }
+  }, at)
+}
+
 async function dragAcrossDiagonal(page: import('@playwright/test').Page): Promise<void> {
   const table = page.locator('.doc-page table.doc-table').first()
   await table.waitFor()
   await page.waitForTimeout(800)
-  const first = await table.locator('td').first().boundingBox()
-  const last = await table.locator('td').last().boundingBox()
-  if (!first || !last) throw new Error('missing cells')
-  // from the middle of the first cell's text to the middle of the last
-  // cell's: the corners sit in the column-resize handle's edge strip, which
-  // keeps its own drag
-  const sx = first.x + first.width / 2
-  const sy = first.y + first.height / 2
-  const ex = last.x + last.width / 2
-  const ey = last.y + last.height / 2
-  await page.mouse.move(sx, sy)
+  // from the first character of the first cell's text to the last character
+  // of the last cell's text, so both end words are inside the selection
+  const start = await textPoint(page, 'first')
+  const end = await textPoint(page, 'last')
+  await page.mouse.move(start.x, start.y)
   await page.mouse.down()
   for (let step = 1; step <= 12; step++) {
-    await page.mouse.move(sx + ((ex - sx) * step) / 12, sy + ((ey - sy) * step) / 12)
+    await page.mouse.move(
+      start.x + ((end.x - start.x) * step) / 12,
+      start.y + ((end.y - start.y) * step) / 12,
+    )
     await page.waitForTimeout(30)
   }
   await page.mouse.up()
