@@ -136,13 +136,15 @@ export function buildCopyEmfPayload(runtime: UniverRuntime): CopyEmfRequest | nu
 }
 
 /// Fire-and-forget: the helper appends the EMF beside the formats Univer's
-/// copy already wrote, and every failure stays silent by design.
-export function emitCopyEmf(runtime: UniverRuntime): void {
+/// copy already wrote, and every failure stays silent by design. The session
+/// id lets the main process attach the saved workbook as the embedding's
+/// native data; without it the copy carries only the EMF picture.
+export function emitCopyEmf(runtime: UniverRuntime, sessionId?: string): void {
   void (async () => {
     try {
       const payload = buildCopyEmfPayload(runtime)
       if (!payload) return
-      await window.desktopApi.appendCopyEmf(payload)
+      await window.desktopApi.appendCopyEmf({ ...payload, sessionId })
     } catch {
       // The EMF is an enhancement; the copy's text formats already landed.
     }

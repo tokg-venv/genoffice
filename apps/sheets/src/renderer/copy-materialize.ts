@@ -155,8 +155,9 @@ export function installCopyMaterialize(
     const result = await originalCopy(options)
     // The clipboard now carries the text/html formats; append the EMF beside
     // them so CAD paste dialogs offer the selection as a picture (silent on
-    // any failure, and a no-op off Windows).
-    emitCopyEmf(runtime)
+    // any failure, and a no-op off Windows). The session id lets the main
+    // process embed the saved workbook as the object's native data.
+    emitCopyEmf(runtime, lazyWorkbookRef.current?.file.sessionId ?? undefined)
     return result
   }
   clipboardService.cut = async () => {

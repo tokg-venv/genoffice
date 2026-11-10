@@ -2145,6 +2145,10 @@ export const copyEmfRequestSchema = z
         }),
       )
       .max(2_000),
+    /// The copy's workbook session: the main process reads that session's
+    /// saved bytes as the embedding's native data. Absent (or unknown to the
+    /// tab) means the clipboard carries only the EMF picture.
+    sessionId: z.string().uuid().optional(),
   })
   .strict()
 export type CopyEmfRequest = z.infer<typeof copyEmfRequestSchema>

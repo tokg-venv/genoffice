@@ -998,7 +998,18 @@ function parseCopyEmfRequest(request: unknown): CopyEmfRequest {
       return row.map(cell)
     }),
     merges,
+    sessionId: parseSessionId(request.sessionId),
   }
+}
+
+/** The copy's workbook session id, or undefined: the main process uses it to
+ * read the saved workbook as the embedding's native data. */
+function parseSessionId(sessionId: unknown): string | undefined {
+  if (sessionId === undefined) return undefined
+  if (typeof sessionId !== 'string' || sessionId.length === 0 || sessionId.length > 64) {
+    throw new Error('Invalid copy-EMF payload: bad session.')
+  }
+  return sessionId
 }
 
 function parseAttachmentAddResult(input: unknown): AttachmentAddResult {

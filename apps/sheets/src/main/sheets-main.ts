@@ -1852,6 +1852,10 @@ interface SheetsRuntimeConfig {
   createDocument?: (request: SheetsAiHostDocumentRequest) => Promise<WorkbookCreateDocumentResult>
 }
 
+/// Decoded workbook bytes above this skip the OLE embedding formats and the
+/// copy carries only the EMF (mirrors the helper's WORKBOOK_EMBED_CAP).
+const WORKBOOK_EMBED_CAP = 8 * 1024 * 1024
+
 let runtime: SheetsRuntimeConfig = {
   preloadPath: join(__dirname, '../preload/index.js'),
   rendererUrl: process.env.ELECTRON_RENDERER_URL,
@@ -3939,8 +3943,8 @@ export function registerSheetsIpc(): void {
     return response === 0 ? 'csv' : response === 1 ? 'xlsx' : 'cancel'
   })
 
-  ipcMain.handle(IPC_CHANNELS.appendCopyEmf, (_event, input: unknown) =>
-    appendCopyEmfToClipboard(input),
+  ipcMain.handle(IPC_CHANNELS.appendCopyEmf, (event, input: unknown) =>
+    appendCopyEmfToClipboard(event, input),
   )
 
   ipcMain.handle(IPC_CHANNELS.saveWorkbook, async (event, input: unknown) => {
@@ -5702,11 +5706,40 @@ function resolveClipboardHelperPath(): string | null {
 /// Spawns the clipboard helper with the copied range's description. The EMF
 /// it appends is an extra clipboard format beside the text the grid already
 /// wrote, so every failure here — missing helper, busy clipboard, a crash —
-/// degrades to the plain copy instead of surfacing an error.
-async function appendCopyEmfToClipboard(request: unknown): Promise<{ ok: boolean }> {
+/// degrades to the plain copy instead of surfacing an error. When the
+/// renderer names its session, the saved workbook's bytes ride along as the
+/// OLE embedding's native data (Embed Source / Object Descriptor).
+async function appendCopyEmfToClipboard(
+  event: IpcMainInvokeEvent,
+  request: unknown,
+): Promise<{ ok: boolean }> {
   const helper = resolveClipboardHelperPath()
   if (!helper || !existsSync(helper)) return { ok: false }
-  const payload = JSON.stringify(copyEmfRequestSchema.parse(request))
+  const validated = copyEmfRequestSchema.parse(request)
+  const payload: Record<string, unknown> = {
+    colWidths: validated.colWidths,
+    rowHeights: validated.rowHeights,
+    cells: validated.cells,
+    merges: validated.merges,
+  }
+  if (validated.sessionId) {
+    // The native data is the last save (an activation-less object has no
+    // live document behind it), capped like the helper's own limit. Any
+    // failure keeps the copy EMF-only.
+    try {
+      const session = sessionFor(event).sessions.get(validated.sessionId)
+      if (session && existsSync(session.path)) {
+        const fileStat = await stat(session.path)
+        if (fileStat.isFile() && fileStat.size > 0 && fileStat.size <= WORKBOOK_EMBED_CAP) {
+          payload.workbookBase64 = (await readFile(session.path)).toString('base64')
+          payload.workbookName = basename(session.path)
+        }
+      }
+    } catch {
+      // Embedding is an enhancement; the copy already carries text, HTML and EMF.
+    }
+  }
+  const serialized = JSON.stringify(payload)
   return await new Promise((resolve) => {
     const child = spawn(helper, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
     const timer = setTimeout(() => {
@@ -5732,7 +5765,7 @@ async function appendCopyEmfToClipboard(request: unknown): Promise<{ ok: boolean
         resolve({ ok: false })
       }
     })
-    child.stdin.write(payload)
+    child.stdin.write(serialized)
     child.stdin.end()
   })
 }

@@ -20,7 +20,13 @@ use std::io::{Read, Write};
 #[cfg(windows)]
 use std::collections::{HashMap, HashSet};
 
+mod embed;
+
 const MAX_EDGE_PIXELS: i32 = 100_000;
+/// Above this the embed formats are skipped and the copy carries only the
+/// EMF: the payload travels over stdin JSON, and pasting a quarter-gigabyte
+/// workbook object is nobody's use case.
+const WORKBOOK_EMBED_CAP: usize = 8 * 1024 * 1024;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -29,6 +35,14 @@ struct EmfRequest {
     row_heights: Vec<f64>,
     cells: Vec<Vec<EmfCell>>,
     merges: Vec<EmfMerge>,
+    /// The saved workbook's bytes, base64: the native data of the OLE
+    /// embedding under `Embed Source`. Absent (unsaved workbook, oversized)
+    /// means the copy carries only the EMF picture.
+    #[serde(default)]
+    workbook_base64: Option<String>,
+    /// The workbook's file name, for the Object Descriptor's source label.
+    #[serde(default)]
+    workbook_name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -187,12 +201,73 @@ fn merge_layout(
 }
 
 #[cfg(windows)]
-fn render_and_append(request: &EmfRequest) -> Result<(i32, i32), String> {
+struct ClipboardPayload {
+    metafile: *mut core::ffi::c_void,
+    embed_source: Option<Vec<u8>>,
+    object_descriptor: Option<Vec<u8>>,
+    width_px: i32,
+    height_px: i32,
+}
+
+#[cfg(windows)]
+fn render_and_append(request: &EmfRequest) -> Result<(i32, i32, bool), String> {
     let metrics = table_metrics(request)?;
-    let metafile = render_metafile(request, &metrics)?;
-    match append_to_clipboard(metafile) {
-        Ok(()) => Ok((metrics.width_px, metrics.height_px)),
+    let (metafile, width_himetric, height_himetric) = render_metafile(request, &metrics)?;
+
+    // The EMF frame is in 0.01mm units — exactly HIMETRIC, which is what both
+    // the OlePres header and the Object Descriptor size carry.
+    let width_himetric = u32::try_from(width_himetric).unwrap_or(0);
+    let height_himetric = u32::try_from(height_himetric).unwrap_or(0);
+    let workbook = embed::decode_workbook(request.workbook_base64.as_ref(), WORKBOOK_EMBED_CAP);
+    let (embed_source, object_descriptor) = match workbook {
+        Some(workbook) => match emf_bytes(metafile).and_then(|emf| {
+            embed::build_embed_source(&workbook, &emf, width_himetric, height_himetric)
+        }) {
+            Ok(source) => {
+                let name = request.workbook_name.as_deref().unwrap_or("Workbook.xlsx");
+                let descriptor = embed::build_object_descriptor(
+                    width_himetric,
+                    height_himetric,
+                    "GenOffice Worksheet",
+                    name,
+                );
+                (Some(source), Some(descriptor))
+            }
+            Err(_) => (None, None),
+        },
+        None => (None, None),
+    };
+
+    let payload = ClipboardPayload {
+        metafile,
+        embed_source,
+        object_descriptor,
+        width_px: metrics.width_px,
+        height_px: metrics.height_px,
+    };
+    match append_to_clipboard(&payload) {
+        Ok(embedded) => Ok((payload.width_px, payload.height_px, embedded)),
         Err(error) => Err(error),
+    }
+}
+
+#[cfg(windows)]
+/// Serializes the rendered metafile into the presentation bytes for the
+/// `Embed Source` compound file. The EMF handle lives in GDI land, so the
+/// bytes come from GetEnhMetaFileBits rather than from the handle's memory.
+fn emf_bytes(metafile: *mut core::ffi::c_void) -> Result<Vec<u8>, String> {
+    use windows_sys::Win32::Graphics::Gdi::GetEnhMetaFileBits;
+    unsafe {
+        let size = GetEnhMetaFileBits(metafile, 0, std::ptr::null_mut());
+        if size <= 0 {
+            return Err("metafile size query failed".into());
+        }
+        let mut bytes = vec![0u8; size as usize];
+        let written = GetEnhMetaFileBits(metafile, size, bytes.as_mut_ptr() as *mut u8);
+        if written != size {
+            return Err("metafile bytes read failed".into());
+        }
+        Ok(bytes)
     }
 }
 
@@ -200,7 +275,7 @@ fn render_and_append(request: &EmfRequest) -> Result<(i32, i32), String> {
 fn render_metafile(
     request: &EmfRequest,
     metrics: &TableMetrics,
-) -> Result<*mut core::ffi::c_void, String> {
+) -> Result<(*mut core::ffi::c_void, i32, i32), String> {
     use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::Graphics::Gdi::{
         CloseEnhMetaFile, CreateEnhMetaFileW, DeleteEnhMetaFile, GetDC, GetDeviceCaps, LOGPIXELSX,
@@ -241,7 +316,7 @@ fn render_metafile(
         unsafe { DeleteEnhMetaFile(handle) };
         return Err(error);
     }
-    Ok(handle)
+    Ok((handle, frame.right, frame.bottom))
 }
 
 #[cfg(windows)]
@@ -428,28 +503,80 @@ unsafe fn draw_cell_text(
 }
 
 #[cfg(windows)]
-fn append_to_clipboard(metafile: *mut core::ffi::c_void) -> Result<(), String> {
+/// One clipboard session for all the formats: the EMF picture, then the
+/// `Embed Source` compound file and the `Object Descriptor` when an OLE
+/// embedding was built. Returns whether the embed formats landed.
+fn append_to_clipboard(payload: &ClipboardPayload) -> Result<bool, String> {
+    use windows_sys::Win32::Foundation::{GlobalFree, HGLOBAL};
     use windows_sys::Win32::Graphics::Gdi::DeleteEnhMetaFile;
     use windows_sys::Win32::System::DataExchange::{
-        CloseClipboard, OpenClipboard, SetClipboardData,
+        CloseClipboard, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
+    };
+    use windows_sys::Win32::System::Memory::{
+        GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock,
     };
     use windows_sys::Win32::System::Ole::CF_ENHMETAFILE;
     use windows_sys::Win32::System::Threading::Sleep;
 
+    /// Copies bytes into a moveable HGLOBAL the clipboard can own.
+    unsafe fn hglobal_from(bytes: &[u8]) -> Result<HGLOBAL, String> {
+        unsafe {
+            let handle = GlobalAlloc(GMEM_MOVEABLE, bytes.len());
+            if handle.is_null() {
+                return Err("GlobalAlloc failed".into());
+            }
+            let locked = GlobalLock(handle);
+            if locked.is_null() {
+                GlobalFree(handle);
+                return Err("GlobalLock failed".into());
+            }
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), locked as *mut u8, bytes.len());
+            GlobalUnlock(handle);
+            Ok(handle)
+        }
+    }
+
+    let wide = |text: &str| -> Vec<u16> { text.encode_utf16().chain(std::iter::once(0)).collect() };
+
     for _ in 0..20 {
         if unsafe { OpenClipboard(std::ptr::null_mut()) } != 0 {
-            if unsafe { SetClipboardData(CF_ENHMETAFILE as u32, metafile) }.is_null() {
+            if unsafe { SetClipboardData(CF_ENHMETAFILE as u32, payload.metafile) }.is_null() {
                 unsafe { CloseClipboard() };
-                unsafe { DeleteEnhMetaFile(metafile) };
+                unsafe { DeleteEnhMetaFile(payload.metafile) };
                 return Err("SetClipboardData failed".into());
             }
-            // The clipboard owns the handle on success; do not delete it.
+            // The clipboard owns the metafile on success; do not delete it.
+            let embed = match payload.embed_source.as_deref() {
+                Some(bytes) => match unsafe { hglobal_from(bytes) } {
+                    Ok(handle) => {
+                        let format =
+                            unsafe { RegisterClipboardFormatW(wide("Embed Source").as_ptr()) };
+                        if unsafe { SetClipboardData(format, handle) }.is_null() {
+                            unsafe { GlobalFree(handle) };
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                    Err(_) => false,
+                },
+                None => false,
+            };
+            if let Some(bytes) = payload.object_descriptor.as_deref() {
+                if let Ok(handle) = unsafe { hglobal_from(bytes) } {
+                    let format =
+                        unsafe { RegisterClipboardFormatW(wide("Object Descriptor").as_ptr()) };
+                    if unsafe { SetClipboardData(format, handle) }.is_null() {
+                        unsafe { GlobalFree(handle) };
+                    }
+                }
+            }
             unsafe { CloseClipboard() };
-            return Ok(());
+            return Ok(embed);
         }
         unsafe { Sleep(50) };
     }
-    unsafe { DeleteEnhMetaFile(metafile) };
+    unsafe { DeleteEnhMetaFile(payload.metafile) };
     Err("clipboard stayed busy".into())
 }
 
@@ -458,12 +585,13 @@ fn write_line(value: serde_json::Value) {
     let _ = writeln!(stdout, "{value}");
 }
 
-fn finish(result: Result<(i32, i32), String>) {
+fn finish(result: Result<(i32, i32, bool), String>) {
     match result {
-        Ok((width, height)) => write_line(serde_json::json!({
+        Ok((width, height, embedded)) => write_line(serde_json::json!({
             "ok": true,
             "width": width,
             "height": height,
+            "embedded": embedded,
         })),
         Err(error) => write_line(serde_json::json!({ "ok": false, "error": error })),
     }
@@ -528,6 +656,8 @@ mod tests {
                 ],
             ],
             merges: vec![],
+            workbook_base64: None,
+            workbook_name: None,
         }
     }
 
