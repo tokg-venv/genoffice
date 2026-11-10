@@ -139,9 +139,16 @@ export function buildCopyEmfPayload(runtime: UniverRuntime): CopyEmfRequest | nu
 /// copy already wrote, and every failure stays silent by design. The session
 /// id lets the main process attach the saved workbook as the embedding's
 /// native data; without it the copy carries only the EMF picture.
+/** asked once, then cached: building the payload walks the whole selection */
+let copyEmfAvailableCache: boolean | null = null
+
 export function emitCopyEmf(runtime: UniverRuntime, sessionId?: string): void {
   void (async () => {
     try {
+      if (copyEmfAvailableCache === null) {
+        copyEmfAvailableCache = await window.desktopApi.isCopyEmfAvailable()
+      }
+      if (!copyEmfAvailableCache) return
       const payload = buildCopyEmfPayload(runtime)
       if (!payload) return
       await window.desktopApi.appendCopyEmf({ ...payload, sessionId })
