@@ -156,7 +156,13 @@ pub fn build_object_descriptor(
     let total = HEADER_LEN + user_type.len() + 1 + source_name.len() + 1;
     let mut out = Vec::with_capacity(total);
     out.extend_from_slice(&(total as u32).to_le_bytes()); // cbSize
-    out.extend_from_slice(GENOFFICE_SHEET_CLSID.as_bytes()); // clsid
+    // clsid: the Windows GUID memory layout (first three fields little-endian),
+    // not the RFC 4122 big-endian order Uuid::as_bytes() returns.
+    let (data1, data2, data3, data4) = GENOFFICE_SHEET_CLSID.as_fields();
+    out.extend_from_slice(&data1.to_le_bytes());
+    out.extend_from_slice(&data2.to_le_bytes());
+    out.extend_from_slice(&data3.to_le_bytes());
+    out.extend_from_slice(data4);
     out.extend_from_slice(&ASPECT_CONTENT.to_le_bytes()); // dwDrawAspect
     out.extend_from_slice(&width_himetric.to_le_bytes()); // sizel.cx
     out.extend_from_slice(&height_himetric.to_le_bytes()); // sizel.cy
@@ -219,6 +225,42 @@ pub fn build_embed_source(
         .read_to_end(&mut bytes)
         .map_err(|e| format!("cfb read-back failed: {e}"))?;
     Ok(bytes)
+}
+
+/// The `\1Ole10Native` stream name (control-char prefix is the CFB convention).
+pub fn ole10_native_name() -> Vec<u16> {
+    "\u{1}Ole10Native"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect()
+}
+
+/// The `\3OlePres000` stream name.
+pub fn olepres_name() -> Vec<u16> {
+    "\u{3}OlePres000"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect()
+}
+
+/// `\1Ole10Native` payload: u32 size then the workbook bytes (MS-OLEDS 2.3.6).
+pub fn native_workbook_bytes(native: &[u8]) -> Option<&[u8]> {
+    if native.len() < 4 {
+        return None;
+    }
+    let size = u32::from_le_bytes(native[0..4].try_into().ok()?) as usize;
+    let bytes = native.get(4..4 + size)?;
+    if bytes.is_empty() { None } else { Some(bytes) }
+}
+
+/// `\3OlePres000` layout: ten 4-byte header fields then the EMF (see
+/// build_ole_pres); Size sits at offset 36, Data at 40.
+pub fn olepres_emf_bytes(pres: &[u8]) -> Option<&[u8]> {
+    if pres.len() < 40 {
+        return None;
+    }
+    let size = u32::from_le_bytes(pres[36..40].try_into().ok()?) as usize;
+    pres.get(40..40 + size)
 }
 
 /// Decodes the payload's optional workbook attachment. Returns None when the
@@ -307,7 +349,14 @@ mod tests {
         let bytes = build_object_descriptor(100, 200, USER_TYPE, "plan.xlsx");
         let cb = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
         assert_eq!(cb as usize, bytes.len());
-        assert_eq!(bytes[4..20], *GENOFFICE_SHEET_CLSID.as_bytes());
+        // GUID memory layout: data1/data2/data3 little-endian, data4 as-is
+        assert_eq!(&bytes[4..8], &0x8C10_B647u32.to_le_bytes());
+        assert_eq!(&bytes[8..10], &0xB13Cu16.to_le_bytes());
+        assert_eq!(&bytes[10..12], &0x4511u16.to_le_bytes());
+        assert_eq!(
+            &bytes[12..20],
+            &[0x8B, 0x4F, 0x2E, 0x31, 0xE5, 0xA9, 0xD7, 0xC6]
+        );
         let user_offset = u32::from_le_bytes(bytes[44..48].try_into().unwrap()) as usize;
         let source_offset = u32::from_le_bytes(bytes[48..52].try_into().unwrap()) as usize;
         assert_eq!(
@@ -342,6 +391,44 @@ mod tests {
         assert_eq!(pres.len(), 40 + emf.len() + 8);
         assert!(compound.exists("/\u{1}CompObj"));
         assert!(compound.exists("/\u{1}Ole"));
+    }
+
+    #[test]
+    fn native_stream_is_size_prefixed_workbook_bytes() {
+        let mut native = 5u32.to_le_bytes().to_vec();
+        native.extend_from_slice(b"hello");
+        assert_eq!(native_workbook_bytes(&native), Some(&b"hello"[..]));
+        assert_eq!(native_workbook_bytes(&[0, 0]), None);
+        assert_eq!(native_workbook_bytes(&0u32.to_le_bytes()), None);
+        let mut short = 9u32.to_le_bytes().to_vec();
+        short.extend_from_slice(b"abc");
+        assert_eq!(native_workbook_bytes(&short), None);
+    }
+
+    #[test]
+    fn olepres_slice_matches_the_size_field() {
+        let emf = vec![7u8; 20];
+        let pres = build_ole_pres(&emf, 10, 20);
+        assert_eq!(olepres_emf_bytes(&pres), Some(&emf[..]));
+        assert_eq!(olepres_emf_bytes(&pres[..24]), None);
+    }
+
+    #[test]
+    fn stream_names_carry_the_control_char_prefix() {
+        assert_eq!(ole10_native_name()[0], 1);
+        assert_eq!(olepres_name()[0], 3);
+        assert_eq!(*ole10_native_name().last().unwrap(), 0);
+    }
+
+    #[test]
+    fn class_guid_matches_the_literal_the_com_server_uses() {
+        // comserver.rs builds its windows GUID from this same u128; the two
+        // must never drift, or the registered class and the embedded class
+        // would be different objects.
+        assert_eq!(
+            GENOFFICE_SHEET_CLSID.as_u128(),
+            0x8C10_B647_B13C_4511_8B4F_2E31_E5A9_D7C6
+        );
     }
 
     #[test]

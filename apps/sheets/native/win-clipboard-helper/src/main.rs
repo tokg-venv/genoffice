@@ -20,7 +20,88 @@ use std::io::{Read, Write};
 #[cfg(windows)]
 use std::collections::{HashMap, HashSet};
 
+#[cfg(windows)]
+mod comserver;
 mod embed;
+mod registry;
+
+/// What the process was asked to do, from argv. The default is the copy
+/// flow (table JSON on stdin); the flags are the OLE server sides.
+#[derive(Debug, PartialEq, Eq)]
+enum Action {
+    CopyEmf,
+    Register,
+    Unregister,
+    Serve,
+}
+
+fn action_from_args(args: &[String]) -> Action {
+    match args.first().map(String::as_str) {
+        Some("--register") => Action::Register,
+        Some("--unregister") => Action::Unregister,
+        Some("--ole-server") => Action::Serve,
+        _ => Action::CopyEmf,
+    }
+}
+
+fn finish_registry(result: Result<(), String>) {
+    match result {
+        Ok(()) => write_line(serde_json::json!({ "ok": true })),
+        Err(error) => write_line(serde_json::json!({ "ok": false, "error": error })),
+    }
+}
+
+#[cfg(windows)]
+fn helper_exe_path() -> Option<String> {
+    use windows_sys::Win32::System::LibraryLoader::GetModuleFileNameW;
+    let mut buffer = vec![0u16; 1024];
+    let written = unsafe {
+        GetModuleFileNameW(
+            core::ptr::null_mut(),
+            buffer.as_mut_ptr(),
+            buffer.len() as u32,
+        )
+    };
+    if written == 0 || written as usize >= buffer.len() {
+        return None;
+    }
+    buffer.truncate(written as usize);
+    Some(String::from_utf16_lossy(&buffer))
+}
+
+#[cfg(not(windows))]
+fn helper_exe_path() -> Option<String> {
+    None
+}
+
+fn run_action(action: Action) {
+    match action {
+        Action::CopyEmf => run_copy_flow(),
+        Action::Register => {
+            #[cfg(windows)]
+            {
+                match helper_exe_path() {
+                    Some(path) => finish_registry(registry::register(&path)),
+                    None => finish_registry(Err("helper path unavailable".into())),
+                }
+            }
+            #[cfg(not(windows))]
+            finish_registry(Err("unsupported platform".into()));
+        }
+        Action::Unregister => {
+            #[cfg(windows)]
+            finish_registry(registry::unregister());
+            #[cfg(not(windows))]
+            finish_registry(Err("unsupported platform".into()));
+        }
+        Action::Serve => {
+            #[cfg(windows)]
+            finish_registry(comserver::run_server());
+            #[cfg(not(windows))]
+            finish_registry(Err("unsupported platform".into()));
+        }
+    }
+}
 
 const MAX_EDGE_PIXELS: i32 = 100_000;
 /// Above this the embed formats are skipped and the copy carries only the
@@ -599,7 +680,8 @@ fn finish(result: Result<(i32, i32, bool), String>) {
     }
 }
 
-fn main() {
+/// The default flow: table JSON on stdin, EMF + OLE formats onto the clipboard.
+fn run_copy_flow() {
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
         finish(Err("unreadable stdin".into()));
@@ -625,6 +707,12 @@ fn main() {
         let _ = &request;
         finish(Err("unsupported platform".into()));
     }
+}
+
+fn main() {
+    run_action(action_from_args(
+        &std::env::args().skip(1).collect::<Vec<String>>(),
+    ));
 }
 
 #[cfg(test)]

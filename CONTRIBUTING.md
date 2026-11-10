@@ -148,8 +148,14 @@ still needs a cross build for `aarch64-pc-windows-msvc`).
 
 The Windows clipboard helper (`native/win-clipboard-helper`, genoffice#1985)
 follows the same layout rule and is built by the same `native:build`/`native:test`
-scripts; it is a Windows-only one-shot binary, so other platforms bundle nothing
-for it and the sheets resolver silently skips the EMF format when it is absent.
+scripts; it is a Windows-only binary, so other platforms bundle nothing for it
+and the sheets resolver silently skips its formats when it is absent. It has
+three modes: the default reads a copied range on stdin and appends the EMF and
+OLE embedding formats to the clipboard; `--register` / `--unregister` write or
+remove the per-user OLE class under `HKCU\Software\Classes\CLSID`; and
+`--ole-server` is the COM local server ole32 launches when a pasted object is
+double-clicked. The server side is opt-in (`GENOFFICE_OLE_SERVER=1`, below)
+until it has been exercised on a Windows machine.
 
 ## Environment variables
 
@@ -165,6 +171,7 @@ testing and local overrides:
 | `GSK_API_KEY`, `GSK_CLI_PATH`                                                                                          | Genspark credentials / CLI location for the built-in AI provider                            |
 | `AI_SEARCH_DISABLE_GSK`, `SERPER_API_KEY`, `SERPLY_API_KEY`, `SEARCHAPI_API_KEY`, `TAVILY_API_KEY`, `PARALLEL_API_KEY` | Disable the gsk search backend / supply a Serper, Serply, SearchApi, Tavily or Parallel key |
 | `XLSX_SIDECAR_PATH`, `XLSX_OPEN_PATH`, `XLSX_DEBUG_PORT`                                                               | Point at a locally built xlsx sidecar and its debug port                                    |
+| `WIN_CLIPBOARD_HELPER_PATH`, `GENOFFICE_OLE_SERVER`                                                                    | Point at a locally built clipboard helper / `1` registers its OLE class on Sheets startup   |
 | `*_DEV_PORT`, `*_RENDERER_URL`                                                                                         | Per-app Vite dev server ports and renderer URLs (set by `npm run dev`)                      |
 
 AI features degrade rather than break without credentials: requests surface an

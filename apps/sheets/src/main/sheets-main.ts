@@ -5676,6 +5676,7 @@ export function startSheetsStandalone(): void {
     app.setAccessibilitySupportEnabled(true)
     installApplicationMenu()
     startCaptureServer()
+    registerOleClassIfEnabled()
     return createSheetsWindow()
   })
   app.on('window-all-closed', () => {
@@ -5709,6 +5710,24 @@ function resolveClipboardHelperPath(): string | null {
     'release',
     'win-clipboard-helper.exe',
   )
+}
+
+/// Registers the OLE class for pasted-object activation (genoffice#1985
+/// stage 3) under HKCU\Software\Classes, per-user and idempotent. Opt-in via
+/// GENOFFICE_OLE_SERVER=1: the server side has not been exercised on a
+/// Windows machine yet, so it is not registered for everyone by default.
+/// `win-clipboard-helper --unregister` removes the keys.
+function registerOleClassIfEnabled(): void {
+  if (process.platform !== 'win32' || process.env.GENOFFICE_OLE_SERVER !== '1') return
+  const helper = resolveClipboardHelperPath()
+  if (!helper || !existsSync(helper)) return
+  try {
+    spawn(helper, ['--register'], { stdio: 'ignore', windowsHide: true })
+      .on('error', () => {})
+      .once('close', () => {})
+  } catch {
+    // Registration is an enhancement; the clipboard copy works without it.
+  }
 }
 
 /// Spawns the clipboard helper with the copied range's description. The EMF
