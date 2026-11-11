@@ -324,3 +324,168 @@ describe('a real PowerPoint-authored deck: deck-wide defaults', () => {
     expect(xml).toContain('<a:latin typeface=')
   })
 })
+
+describe('stage 3c: per-run fonts, bullets, tab stops and the remaining blip kinds', () => {
+  it('a character run can override the deck typeface through ansiFontRef', async () => {
+    const slides: SlideSpec[] = [
+      {
+        textSequences: [],
+        shapes: [
+          {
+            rect: [0, 0, 2000, 500],
+            text: 'Two faces',
+            charRuns: [{ count: 9, fontRef: 1 }],
+          },
+        ],
+      },
+    ]
+    const xml = await slideXml(pptBytes(slides, { fonts: ['Calibri', 'Georgia'] }))
+    expect(xml).toContain('<a:latin typeface="Georgia"/>')
+  })
+
+  it('carries bullet char, size, color and explicit tab stops', async () => {
+    const slides: SlideSpec[] = [
+      {
+        textSequences: [],
+        shapes: [
+          {
+            rect: [0, 0, 3000, 1000],
+            text: 'Bulleted',
+            bullet: { char: '*', size: 100, color: [0, 128, 0] },
+            tabStops: [500, 1000],
+          },
+        ],
+      },
+    ]
+    const xml = await slideXml(pptBytes(slides))
+    expect(xml).toContain('<a:buChar char="*"/>')
+    expect(xml).toContain('<a:buSzPct val="100000"/>')
+    expect(xml).toContain('<a:buClr><a:srgbClr val="008000"/></a:buClr>')
+    expect(xml).toContain('<a:tabLst>')
+    expect(xml).toContain(`pos="${Math.round(500 * (914400 / 576))}"`)
+    expect(xml).toContain(`pos="${Math.round(1000 * (914400 / 576))}"`)
+  })
+
+  it('a paragraph can explicitly clear its bullet', async () => {
+    const slides: SlideSpec[] = [
+      {
+        textSequences: [],
+        shapes: [{ rect: [0, 0, 2000, 500], text: 'No bullet', bullet: { has: false } }],
+      },
+    ]
+    expect(await slideXml(pptBytes(slides))).toContain('<a:buNone/>')
+  })
+
+  it('writes TIFF, DIB and PICT blips as picture parts', async () => {
+    const tiff = new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00])
+    const dib = new Uint8Array(40 + 4)
+    const dv = new DataView(dib.buffer)
+    dv.setUint32(0, 40, true) // biSize
+    dv.setInt32(4, 1, true) // biWidth
+    dv.setInt32(8, 1, true) // biHeight
+    dv.setUint16(12, 1, true) // biPlanes
+    dv.setUint16(14, 24, true) // biBitCount
+    const pict = new Uint8Array([0x00, 0x11, 0x02, 0xff, 0x0c, 0x00])
+    const slides: SlideSpec[] = [
+      {
+        textSequences: [],
+        shapes: [
+          { rect: [0, 0, 500, 500], shapeType: 75, blipIndex: 1 },
+          { rect: [600, 0, 1100, 500], shapeType: 75, blipIndex: 2 },
+          { rect: [1200, 0, 1700, 500], shapeType: 75, blipIndex: 3 },
+        ],
+      },
+    ]
+    const bytes = pptBytes(slides, {
+      extraBlips: [
+        { kind: 'tiff', data: tiff },
+        { kind: 'dib', data: dib },
+        { kind: 'pict', data: pict },
+      ],
+    })
+    const zip = await parts(bytes)
+    expect(new Uint8Array(await zip.file('ppt/media/image1.tiff')!.async('uint8array'))).toEqual(
+      tiff,
+    )
+    const bmp = new Uint8Array(await zip.file('ppt/media/image2.bmp')!.async('uint8array'))
+    expect(bmp[0]).toBe(0x42)
+    expect(bmp[1]).toBe(0x4d)
+    expect(new Uint8Array(await zip.file('ppt/media/image3.pict')!.async('uint8array'))).toEqual(
+      pict,
+    )
+    const types = await zip.file('[Content_Types].xml')!.async('string')
+    expect(types).toContain('Extension="tiff" ContentType="image/tiff"')
+    expect(types).toContain('Extension="bmp" ContentType="image/bmp"')
+    expect(types).toContain('Extension="pict" ContentType="image/x-pict"')
+  })
+})
+
+describe('stage 3d: nested groups, layout inheritance and speaker notes', () => {
+  it('composes nested group transforms', async () => {
+    const slides: SlideSpec[] = [
+      {
+        textSequences: [],
+        shapes: [
+          {
+            group: {
+              bounds: [0, 0, 1000, 1000],
+              rect: [1000, 1000, 3000, 3000],
+              children: [
+                {
+                  group: {
+                    bounds: [0, 0, 500, 500],
+                    rect: [0, 0, 500, 500],
+                    children: [{ rect: [0, 0, 250, 250], text: 'Nested' }],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ]
+    const xml = await slideXml(pptBytes(slides))
+    // child [0,0,250,250] -> child group [0,0,500,500] -> parent [1000,1000,3000,3000]
+    expect(xml).toContain('<a:off x="1587500" y="1587500"/>')
+    expect(xml).toContain('<a:ext cx="793750" cy="793750"/>')
+    expect(xml).toContain('<a:t>Nested</a:t>')
+  })
+
+  it('defines master placeholders on the layout and references them from slides', async () => {
+    const slides: SlideSpec[] = [
+      {
+        textSequences: [],
+        shapes: [{ rect: [0, 0, 2000, 500], text: 'Slide title', placeholderId: 13 }],
+      },
+    ]
+    const bytes = pptBytes(slides, {
+      master: {
+        shapes: [{ rect: [0, 0, 5000, 800], text: 'Master title', placeholderId: 13 }],
+      },
+    })
+    const zip = await parts(bytes)
+    const layout = await zip.file('ppt/slideLayouts/slideLayout1.xml')!.async('string')
+    const slide = await zip.file('ppt/slides/slide1.xml')!.async('string')
+    expect(layout).toContain('<p:ph type="title" idx="1"/>')
+    expect(slide).toContain('idx="1"')
+  })
+
+  it('writes a notes master, a notes slide and all their relationships', async () => {
+    const slides: SlideSpec[] = [
+      { textSequences: [], shapes: [{ rect: [0, 0, 2000, 500], text: 'Slide' }] },
+    ]
+    const bytes = pptBytes(slides, { notes: ['Remember the demo'] })
+    const zip = await parts(bytes)
+    const note = await zip.file('ppt/notesSlides/notesSlide1.xml')!.async('string')
+    expect(note).toContain('<a:t>Remember the demo</a:t>')
+    expect(zip.file('ppt/notesMasters/notesMaster1.xml')).not.toBeNull()
+    const noteRels = await zip.file('ppt/notesSlides/_rels/notesSlide1.xml.rels')!.async('string')
+    expect(noteRels).toContain('../slides/slide1.xml')
+    const slideRels = await zip.file('ppt/slides/_rels/slide1.xml.rels')!.async('string')
+    expect(slideRels).toContain('notesSlide1.xml')
+    const presentation = await zip.file('ppt/presentation.xml')!.async('string')
+    expect(presentation).toContain('<p:notesMasterIdLst>')
+    const types = await zip.file('[Content_Types].xml')!.async('string')
+    expect(types).toContain('/ppt/notesSlides/notesSlide1.xml')
+  })
+})

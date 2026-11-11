@@ -63,6 +63,7 @@ interface TextDefaults {
   sizePt: number | null
   titleSizePt: number | null
   typeface: string | null
+  typefaces: string[]
 }
 
 function textDefaultsOf(presentation: PptPresentation): TextDefaults {
@@ -76,6 +77,7 @@ function textDefaultsOf(presentation: PptPresentation): TextDefaults {
     sizePt: body?.sizePt ?? null,
     titleSizePt: title?.sizePt ?? null,
     typeface: (fontRef !== null ? typefaces[fontRef] : undefined) ?? typefaces[0] ?? null,
+    typefaces,
   }
 }
 
@@ -154,7 +156,12 @@ function runXml(
     ...(format?.underline ? ['u="sng"'] : []),
   ].join(' ')
   const fill = format?.color ? `<a:solidFill><a:srgbClr val="${format.color}"/></a:solidFill>` : ''
-  const latin = defaults.typeface ? `<a:latin typeface="${escapeXml(defaults.typeface)}"/>` : ''
+  const face =
+    format?.fontRef !== null && format?.fontRef !== undefined
+      ? defaults.typefaces[format.fontRef]
+      : undefined
+  const typeface = face ?? defaults.typeface
+  const latin = typeface ? `<a:latin typeface="${escapeXml(typeface)}"/>` : ''
   return `<a:r><a:rPr ${attrs}>${fill}${latin}</a:rPr><a:t>${escapeXml(text)}</a:t></a:r>`
 }
 
@@ -175,7 +182,24 @@ function paragraphsXml(
       if (part !== '') paragraphs[paragraphs.length - 1]!.push({ text: part, format: run.format })
     })
   }
-  const pPr = `<a:pPr algn="${align ?? 'l'}"/>`
+  const paragraph = style.paragraphs[0]
+  const bulletXml =
+    paragraph?.bullet === 'none'
+      ? '<a:buNone/>'
+      : paragraph?.bullet === 'char'
+        ? `<a:buChar char="${escapeXml(paragraph.bulletChar ?? '•')}"/>`
+        : ''
+  const bulletSize = paragraph?.bulletSizePct ? `<a:buSzPct val="${paragraph.bulletSizePct}"/>` : ''
+  const bulletColor = paragraph?.bulletColor
+    ? `<a:buClr><a:srgbClr val="${paragraph.bulletColor}"/></a:buClr>`
+    : ''
+  const tabXml = paragraph?.tabStops.length
+    ? `<a:tabLst>${paragraph.tabStops
+        .map((pos) => `<a:tab pos="${Math.round(pos * EMU_PER_MASTER_UNIT)}" algn="l"/>`)
+        .join('')}</a:tabLst>`
+    : ''
+  const pPr =
+    `<a:pPr algn="${align ?? 'l'}">` + bulletColor + bulletSize + bulletXml + tabXml + '</a:pPr>'
   return paragraphs
     .map(
       (paragraph) =>
@@ -197,6 +221,7 @@ function spXml(
   box: Box,
   id: number,
   defaults: TextDefaults,
+  phIdx: number | null = null,
 ): string {
   const isTitle = text !== null && TITLE_KINDS.has(text.kind)
   const preset = SHAPE_PRESETS[shape.shapeType] ?? 'rect'
@@ -212,7 +237,7 @@ function spXml(
           ? 'title'
           : null
       return phType
-        ? `<p:cNvSpPr>${isTitle ? '<a:spLocks noGrp="1"/>' : ''}</p:cNvSpPr><p:nvPr><p:ph type="${phType}"/></p:nvPr>`
+        ? `<p:cNvSpPr>${isTitle ? '<a:spLocks noGrp="1"/>' : ''}</p:cNvSpPr><p:nvPr><p:ph type="${phType}"${phIdx !== null ? ` idx="${phIdx}"` : ''}/></p:nvPr>`
         : '<p:cNvSpPr/><p:nvPr/>'
     })() +
     '</p:nvSpPr>' +
@@ -244,6 +269,7 @@ function slideShapes(
   slideWidthEmu: number,
   images: Array<PptImage | null>,
   defaults: TextDefaults,
+  placeholderIdx: Map<number, number>,
 ): { xml: string; rels: Array<{ id: string; imageIndex: number }> } {
   const rels: Array<{ id: string; imageIndex: number }> = []
   const parts: string[] = []
@@ -286,13 +312,15 @@ function slideShapes(
   const leftover = slide.textSequences.filter((sequence) => !used.has(sequence.text))
   let outlineAt = 0
   const emit = (shape: PptShape, text: ShapeText | null, box: Box): void => {
+    const phIdx =
+      shape.placeholderId === null ? null : (placeholderIdx.get(shape.placeholderId) ?? null)
     const image = shape.blipIndex === null ? null : (images[shape.blipIndex - 1] ?? null)
     if (image) {
       const relId = `rId${rels.length + 2}`
       rels.push({ id: relId, imageIndex: shape.blipIndex! - 1 })
       parts.push(picXml(shape, box, id++, relId))
     } else {
-      parts.push(spXml(shape, text, box, id++, defaults))
+      parts.push(spXml(shape, text, box, id++, defaults, phIdx))
     }
   }
 
@@ -346,10 +374,25 @@ export async function writePptxPresentation(presentation: PptPresentation): Prom
 
   const slideRels: string[] = []
   const defaults = textDefaultsOf(presentation)
+  const masterPlaceholders = (presentation.master?.shapes ?? []).filter(
+    (shape) => shape.placeholderId !== null && shape.placeholderId !== 0 && shape.rect !== null,
+  )
+  const placeholderIdx = new Map<number, number>()
+  masterPlaceholders.forEach((shape, index) => placeholderIdx.set(shape.placeholderId!, index + 1))
   const slideXmls = presentation.slides.map((slide, index) => {
-    const { xml: shapes, rels } = slideShapes(slide, slideWidthEmu, images, defaults)
+    const { xml: shapes, rels } = slideShapes(
+      slide,
+      slideWidthEmu,
+      images,
+      defaults,
+      placeholderIdx,
+    )
+    const notes = presentation.notes[index] ?? []
     const relations =
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' +
+      (notes.length > 0
+        ? `<Relationship Id="rId900" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide${index + 1}.xml"/>`
+        : '') +
       rels
         .map(
           (rel) =>
@@ -382,7 +425,13 @@ export async function writePptxPresentation(presentation: PptPresentation): Prom
             ? 'image/x-emf'
             : ext === 'wmf'
               ? 'image/x-wmf'
-              : 'image/jpeg'
+              : ext === 'tiff'
+                ? 'image/tiff'
+                : ext === 'bmp'
+                  ? 'image/bmp'
+                  : ext === 'pict'
+                    ? 'image/x-pict'
+                    : 'image/jpeg'
       return `<Default Extension="${ext}" ContentType="${type}"/>`
     })
     .join('')
@@ -401,6 +450,16 @@ export async function writePptxPresentation(presentation: PptPresentation): Prom
       .join('') +
     '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>' +
     '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>' +
+    (presentation.notes.some((n) => n.length > 0)
+      ? '<Override PartName="/ppt/notesMasters/notesMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml"/>' +
+        presentation.slides
+          .map((_s, i) =>
+            (presentation.notes[i]?.length ?? 0) > 0
+              ? `<Override PartName="/ppt/notesSlides/notesSlide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>`
+              : '',
+          )
+          .join('')
+      : '') +
     '</Types>'
   zip.file('[Content_Types].xml', contentTypes)
 
@@ -423,6 +482,9 @@ export async function writePptxPresentation(presentation: PptPresentation): Prom
         .map((_s, i) => `<p:sldId id="${256 + i}" r:id="rId${i + 2}"/>`)
         .join('')}</p:sldIdLst>` +
       `<p:sldSz cx="${slideWidthEmu}" cy="${slideHeightEmu}"/>` +
+      (presentation.notes.some((n) => n.length > 0)
+        ? `<p:notesMasterIdLst><p:notesMasterId r:id="rId${slideXmls.length + 2}"/></p:notesMasterIdLst>`
+        : '') +
       '<p:notesSz cx="6858000" cy="9144000"/></p:presentation>',
   )
 
@@ -436,6 +498,9 @@ export async function writePptxPresentation(presentation: PptPresentation): Prom
           `<Relationship Id="rId${i + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${i + 1}.xml"/>`,
       )
       .join('') +
+    (presentation.notes.some((n) => n.length > 0)
+      ? `<Relationship Id="rId${slideXmls.length + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/>`
+      : '') +
     '</Relationships>'
   zip.file('ppt/_rels/presentation.xml.rels', presentationRels)
   slideRels.forEach((rels, i) => zip.file(`ppt/slides/_rels/slide${i + 1}.xml.rels`, rels))
@@ -463,6 +528,9 @@ export async function writePptxPresentation(presentation: PptPresentation): Prom
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' +
       '</Relationships>',
   )
+  const layoutPlaceholders = masterPlaceholders
+    .map((shape, index) => spXml(shape, null, boxOf(shape.rect!), index + 2, defaults, index + 1))
+    .join('')
   zip.file(
     'ppt/slideLayouts/slideLayout1.xml',
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -470,7 +538,9 @@ export async function writePptxPresentation(presentation: PptPresentation): Prom
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
       'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="blank">' +
       '<p:cSld name="Blank"><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' +
-      '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld>' +
+      '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' +
+      layoutPlaceholders +
+      '</p:spTree></p:cSld>' +
       '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>',
   )
   zip.file(
@@ -480,6 +550,50 @@ export async function writePptxPresentation(presentation: PptPresentation): Prom
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>' +
       '</Relationships>',
   )
+
+  if (presentation.notes.some((n) => n.length > 0)) {
+    zip.file(
+      'ppt/notesMasters/notesMaster1.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<p:notesMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+        'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+        `<p:cSld><p:spTree>${spTreeHead}</p:spTree></p:cSld>` +
+        '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>' +
+        '</p:notesMaster>',
+    )
+    zip.file(
+      'ppt/notesMasters/_rels/notesMaster1.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
+    )
+    presentation.notes.forEach((notes, index) => {
+      if (notes.length === 0) return
+      const body = notes
+        .map((line) => `<a:p><a:r><a:rPr lang="en-US"/><a:t>${escapeXml(line)}</a:t></a:r></a:p>`)
+        .join('')
+      zip.file(
+        `ppt/notesSlides/notesSlide${index + 1}.xml`,
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+          'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+          'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+          `<p:cSld><p:spTree>${spTreeHead}` +
+          '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Notes Placeholder"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>' +
+          '<p:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>' +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>${body}</p:txBody></p:sp></p:spTree></p:cSld>` +
+          '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>',
+      )
+      zip.file(
+        `ppt/notesSlides/_rels/notesSlide${index + 1}.xml.rels`,
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/>' +
+          `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide${index + 1}.xml"/>` +
+          '</Relationships>',
+      )
+    })
+  }
 
   slideXmls.forEach((xml, i) => zip.file(`ppt/slides/slide${i + 1}.xml`, xml))
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })

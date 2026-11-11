@@ -18,6 +18,8 @@ export interface TextCharFormat {
   sizePt: number | null
   /** RRGGBB, or null for scheme/indexed colors */
   color: string | null
+  /** FontCollection index from ansiFontRef / typeface, when the run sets one */
+  fontRef: number | null
 }
 
 export interface TextParagraphFormat {
@@ -25,6 +27,13 @@ export interface TextParagraphFormat {
   level: number
   /** DrawingML alignment name, or null */
   align: 'l' | 'ctr' | 'r' | 'just' | null
+  /** bullet presence: explicit char, no bullet, or inherited */
+  bullet: 'char' | 'none' | null
+  bulletChar: string | null
+  bulletSizePct: number | null
+  bulletColor: string | null
+  /** tab stop positions, in master units, from the TabStops structure */
+  tabStops: number[]
 }
 
 export interface TextStyle {
@@ -110,18 +119,37 @@ export function parseStyleTextProp(payload: Uint8Array, charCount: number): Text
     const has = (bit: number): boolean => (mask & bit) !== 0
     // TextPFException field order; tabStops is variable-sized, so its presence
     // ends the parse instead of guessing the length.
-    const variable = has(PF_TAB_STOPS)
     let align: TextParagraphFormat['align'] = null
+    let bullet: TextParagraphFormat['bullet'] = null
+    let bulletChar: string | null = null
+    let bulletSizePct: number | null = null
+    let bulletColor: string | null = null
+    const tabStops: number[] = []
     const step = (bytes: number, read?: (offset: number) => void): void => {
       if (at + bytes > view.byteLength) return
       read?.(at)
       at += bytes
     }
-    if (has(PF_BULLET_FLAGS)) step(2)
-    if (has(PF_BULLET_CHAR)) step(2)
+    if (has(PF_BULLET_FLAGS))
+      step(2, (o) => {
+        const flags = view.getUint16(o, true)
+        bullet = (flags & 0x1) !== 0 ? 'char' : 'none'
+      })
+    if (has(PF_BULLET_CHAR))
+      step(2, (o) => {
+        const code = view.getUint16(o, true)
+        if (code !== 0) bulletChar = String.fromCharCode(code)
+      })
     if (has(PF_BULLET_FONT)) step(2)
-    if (has(PF_BULLET_SIZE)) step(2)
-    if (has(PF_BULLET_COLOR)) step(4)
+    if (has(PF_BULLET_SIZE))
+      step(2, (o) => {
+        const size = view.getUint16(o, true)
+        if (size > 0 && size <= 4000) bulletSizePct = size * 1000
+      })
+    if (has(PF_BULLET_COLOR))
+      step(4, (o) => {
+        bulletColor = colorOf(view, o)
+      })
     if (has(PF_ALIGN))
       step(2, (o) => {
         align = ALIGNMENTS[view.getUint16(o, true)] ?? null
@@ -132,12 +160,32 @@ export function parseStyleTextProp(payload: Uint8Array, charCount: number): Text
     if (has(PF_LEFT_MARGIN)) step(2)
     if (has(PF_INDENT)) step(2)
     if (has(PF_DEFAULT_TAB)) step(2)
+    // TabStops: a u16 count followed by count x (u16 position, u16 type),
+    // the layout used by the MS-PPT TextPFException tabStops member.
+    if (has(PF_TAB_STOPS) && at + 2 <= view.byteLength) {
+      const count = Math.min(view.getUint16(at, true), 64)
+      for (let i = 0; i < count; i++) {
+        const offset = at + 2 + i * 4
+        if (offset + 2 > view.byteLength) break
+        tabStops.push(view.getUint16(offset, true))
+      }
+      at += 2 + count * 4
+    }
     if (has(PF_FONT_ALIGN)) step(2)
     if (has(PF_WRAP_FLAGS)) step(2)
     if (has(PF_TEXT_DIRECTION)) step(2)
-    paragraphs.push({ count, level, align })
+    paragraphs.push({
+      count,
+      level,
+      align,
+      bullet,
+      bulletChar,
+      bulletSizePct,
+      bulletColor,
+      tabStops,
+    })
     covered += count
-    if (count === 0 || variable) break
+    if (count === 0) break
   }
 
   // TextCFRun records follow the paragraph runs
@@ -154,6 +202,7 @@ export function parseStyleTextProp(payload: Uint8Array, charCount: number): Text
     let underline = false
     let sizePt: number | null = null
     let color: string | null = null
+    let fontRef: number | null = null
     const step = (bytes: number, read?: (offset: number) => void): void => {
       if (at + bytes > view.byteLength) return
       read?.(at)
@@ -179,9 +228,15 @@ export function parseStyleTextProp(payload: Uint8Array, charCount: number): Text
         underline = (style & 0x04) !== 0
       })
     }
-    if (has(CF_TYPEFACE)) step(2)
+    if (has(CF_TYPEFACE))
+      step(2, (o) => {
+        fontRef = view.getUint16(o, true)
+      })
     if (has(CF_OLD_EA)) step(2)
-    if (has(CF_ANSI)) step(2)
+    if (has(CF_ANSI))
+      step(2, (o) => {
+        fontRef = view.getUint16(o, true)
+      })
     if (has(CF_SYMBOL)) step(2)
     if (has(CF_SIZE))
       step(2, (o) => {
@@ -194,7 +249,7 @@ export function parseStyleTextProp(payload: Uint8Array, charCount: number): Text
       })
     if (has(CF_POSITION)) step(2)
     // pp10ext / newEATypeface / csTypeface / pp11ext MUST be zero
-    characters.push({ count, bold, italic, underline, sizePt, color })
+    characters.push({ count, bold, italic, underline, sizePt, color, fontRef })
     covered += count
     if (count === 0) break
   }
@@ -225,19 +280,33 @@ export function applyCharacterRuns(
 export function readPfException(
   view: DataView,
   at: number,
-): { end: number; align: TextParagraphFormat['align'] } | null {
+): {
+  end: number
+  align: TextParagraphFormat['align']
+  bullet: TextParagraphFormat['bullet']
+  bulletChar: string | null
+} | null {
   if (at + 4 > view.byteLength) return null
   const mask = view.getUint32(at, true)
   let cursor = at + 4
   let align: TextParagraphFormat['align'] = null
+  let bullet: TextParagraphFormat['bullet'] = null
+  let bulletChar: string | null = null
   const has = (bit: number): boolean => (mask & bit) !== 0
   const step = (bytes: number, read?: (offset: number) => void): void => {
     if (cursor + bytes > view.byteLength) return
     read?.(cursor)
     cursor += bytes
   }
-  if (has(PF_BULLET_FLAGS)) step(2)
-  if (has(PF_BULLET_CHAR)) step(2)
+  if (has(PF_BULLET_FLAGS))
+    step(2, (o) => {
+      bullet = (view.getUint16(o, true) & 0x1) !== 0 ? 'char' : 'none'
+    })
+  if (has(PF_BULLET_CHAR))
+    step(2, (o) => {
+      const code = view.getUint16(o, true)
+      if (code !== 0) bulletChar = String.fromCharCode(code)
+    })
   if (has(PF_BULLET_FONT)) step(2)
   if (has(PF_BULLET_SIZE)) step(2)
   if (has(PF_BULLET_COLOR)) step(4)
@@ -251,11 +320,14 @@ export function readPfException(
   if (has(PF_LEFT_MARGIN)) step(2)
   if (has(PF_INDENT)) step(2)
   if (has(PF_DEFAULT_TAB)) step(2)
-  if (has(PF_TAB_STOPS)) return { end: view.byteLength, align } // variable-sized tail
+  if (has(PF_TAB_STOPS) && cursor + 2 <= view.byteLength) {
+    const count = Math.min(view.getUint16(cursor, true), 64)
+    cursor += 2 + count * 4
+  }
   if (has(PF_FONT_ALIGN)) step(2)
   if (has(PF_WRAP_FLAGS)) step(2)
   if (has(PF_TEXT_DIRECTION)) step(2)
-  return { end: cursor, align }
+  return { end: cursor, align, bullet, bulletChar }
 }
 
 export interface CfFields {

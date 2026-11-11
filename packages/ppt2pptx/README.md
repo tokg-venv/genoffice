@@ -40,9 +40,28 @@ The parse model (`PptPresentation`, `parsePptPresentation`) now exposes
 `parsePptPresentation` (the Pictures stream) is optional, so stage-1 callers
 and the hostile-input fuzz are unaffected.
 
-## Not carried yet
+## Stage 3c / 3d carries
 
-TIFF/DIB/PICT blips, per-run font-face refs, bullets and numbering, tab stops,
-nested group transforms, full placeholder inheritance semantics and notes.
-Stage 3 keeps the geometry and formatting it can prove from the bytes; the rest
-remains stacked text.
+TIFF and DIB (converted to BMP) blips, PICT blips kept byte-exact as
+`image/x-pict` parts, per-run `ansiFontRef` typefaces, bullet characters /
+explicit `buNone` with size and color, explicit tab stops, nested group
+transforms, master placeholders defined on the slide layout and referenced by
+`idx` from slides, and speaker notes as `notesMaster` / `notesSlide` parts with
+their relationships and content types.
+
+## Not carried yet, and known limits
+
+- Automatic numbering (`bulletAutoNumberScheme` in `TextPFException9`) and
+  bullet pictures are not decoded; only character bullets and explicit
+  `buNone` are.
+- `TabStops` is read as a u16 count plus 4 bytes per entry (u16 position, u16
+  type). The in-repo sample does not exercise that PFMasks bit, so the layout
+  is verified only against the synthetic builder.
+- `PICT` has no OOXML media type; the bytes are preserved but PowerPoint may
+  not render the part.
+- Notes are attached to slides in document order, not by `NotesAtom.slideId`,
+  and the notes master is a minimal skeleton.
+- Placeholder inheritance is geometry/idx level: text-style inheritance from
+  the master is approximated by the deck-wide defaults above.
+- Notes on damaged decks, per-run East-Asian/symbol font refs and nested group
+  rotation are not carried.

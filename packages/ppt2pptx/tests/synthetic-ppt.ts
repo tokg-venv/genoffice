@@ -15,6 +15,8 @@ export interface CharRunSpec {
   underline?: boolean
   size?: number
   color?: [number, number, number]
+  /** FontCollection index written as ansiFontRef */
+  fontRef?: number
 }
 
 export interface ShapeSpec {
@@ -40,6 +42,9 @@ export interface ShapeSpec {
   placeholderId?: number
   /** emit as a real Escher group with mapped child coordinates */
   group?: GroupSpec
+  bullet?: { has?: boolean; char?: string; size?: number; color?: [number, number, number] }
+  /** explicit tab stop positions, in master units */
+  tabStops?: number[]
 }
 
 export interface GroupSpec {
@@ -83,6 +88,10 @@ export interface BuildOptions {
   textMasterStyles?: Array<{ textType: number; sizePt: number; fontRef?: number }>
   /** embedded metafile blips (uncompressed), one per 1-based blip index */
   metafiles?: Array<{ kind: 'emf' | 'wmf'; data: Uint8Array }>
+  /** speaker note text, one entry per slide */
+  notes?: string[]
+  /** TIFF / DIB / PICT blips, appended after the metafiles in BStore order */
+  extraBlips?: Array<{ kind: 'tiff' | 'dib' | 'pict'; data: Uint8Array }>
 }
 
 const record = (type: number, payload: Uint8Array, instance = 0, version = 0): Uint8Array => {
@@ -145,23 +154,52 @@ const optEntry = (pid: number, value: number): Uint8Array => {
 
 /** StyleTextPropAtom: one paragraph run (optional alignment) + character runs. */
 function styleTextProp(spec: ShapeSpec, charCount: number): Uint8Array {
-  const paragraph: Uint8Array[] = [u32(charCount), u16(0)]
-  if (spec.paragraphAlign === undefined) {
-    paragraph.push(u32(0)) // PFMasks: no optional fields
-  } else {
-    paragraph.push(u32(1 << 11), u16(spec.paragraphAlign)) // PFMasks.align + textAlignment
+  let pfMask = 0
+  const pfFields: Uint8Array[] = []
+  if (spec.bullet) {
+    pfMask |= 1 << 0 // hasBullet -> bulletFlags exists
+    pfFields.push(u16(spec.bullet.has === false ? 0 : 1))
+  }
+  if (spec.bullet?.char) {
+    pfMask |= 1 << 7
+    pfFields.push(u16(spec.bullet.char.codePointAt(0) ?? 0x2022))
+  }
+  if (spec.bullet?.size !== undefined) {
+    pfMask |= 1 << 6
+    pfFields.push(u16(spec.bullet.size))
+  }
+  if (spec.bullet?.color) {
+    pfMask |= 1 << 5
+    pfFields.push(u8(...spec.bullet.color, 0))
+  }
+  const pfAfterTabs: Uint8Array[] = []
+  if (spec.paragraphAlign !== undefined) {
+    pfMask |= 1 << 11
+    pfAfterTabs.push(u16(spec.paragraphAlign))
+  }
+  // fields before tabStops are appended after the fixed-order bullet fields
+  const tabStops = spec.tabStops ?? []
+  if (tabStops.length > 0) {
+    pfMask |= 1 << 20
+  }
+  const paragraph: Uint8Array[] = [u32(charCount), u16(0), u32(pfMask), ...pfFields, ...pfAfterTabs]
+  if (tabStops.length > 0) {
+    paragraph.push(u16(tabStops.length))
+    for (const pos of tabStops) paragraph.push(u16(pos), u16(0))
   }
   const characters: Uint8Array[] = []
   for (const run of spec.charRuns ?? []) {
     const style = (run.bold ? 1 : 0) | (run.italic ? 2 : 0) | (run.underline ? 4 : 0)
     let mask = 0
-    if (style !== 0) mask |= 0x07 // bold / italic / underline -> fontStyle exists
+    if (style !== 0) mask |= 0x07
     if (run.size !== undefined) mask |= 1 << 17
     if (run.color !== undefined) mask |= 1 << 18
+    if (run.fontRef !== undefined) mask |= 1 << 22
     const fields: Uint8Array[] = [u32(run.count), u32(mask)]
     if (style !== 0) fields.push(u16(style))
+    if (run.fontRef !== undefined) fields.push(u16(run.fontRef)) // ansiFontRef precedes fontSize
     if (run.size !== undefined) fields.push(u16(run.size))
-    if (run.color !== undefined) fields.push(u8(...run.color, 0)) // ColorIndexStruct
+    if (run.color !== undefined) fields.push(u8(...run.color, 0))
     characters.push(...fields)
   }
   return record(0x0fa1, concat([...paragraph, ...characters]), charCount)
@@ -210,7 +248,12 @@ function shapeContainer(spec: ShapeSpec, index: number): Uint8Array {
     if (spec.outlineRef) atoms.push(outlineTextRef(index))
     else {
       atoms.push(spec.atom === 'bytes' ? textBytes(spec.text) : textChars(spec.text))
-      if (spec.charRuns || spec.paragraphAlign !== undefined) {
+      if (
+        spec.charRuns ||
+        spec.paragraphAlign !== undefined ||
+        spec.bullet ||
+        spec.tabStops?.length
+      ) {
         atoms.push(styleTextProp(spec, [...spec.text].length))
       }
     }
@@ -233,7 +276,28 @@ function groupContainer(group: GroupSpec, index: number): Uint8Array {
   ])
   // flat, like a real PowerPoint spgrContainer: the group shape is its first
   // SpContainer and the members follow it
-  return concat([self, ...group.children.map(shapeContainer)])
+  const members = group.children.map((child, childIndex) =>
+    child.group
+      ? escherContainer(0xf003, groupParts(child.group, index + childIndex + 1))
+      : shapeContainer(child, index + childIndex + 1),
+  )
+  return concat([self, ...members])
+}
+
+function groupParts(group: GroupSpec, index: number): Uint8Array[] {
+  const self = escherContainer(0xf004, [
+    escher(0xf00a, concat([u32(index + 1000), u32(0x5)]), 0),
+    escher(0xf009, concat(group.bounds.map(i32))),
+    escher(0xf00f, concat(group.rect.map(i32))),
+  ])
+  return [
+    self,
+    ...group.children.map((child, childIndex) =>
+      child.group
+        ? escherContainer(0xf003, groupParts(child.group, index + childIndex + 1))
+        : shapeContainer(child, index + childIndex + 1),
+    ),
+  ]
 }
 
 /** A slide's PPDrawing: DgContainer -> SpgrContainer -> SpContainers. */
@@ -272,14 +336,24 @@ function embeddedMetafile(kind: 'emf' | 'wmf', data: Uint8Array): Uint8Array {
   return escher(kind === 'emf' ? 0xf01a : 0xf01b, concat([new Uint8Array(16), header, data]))
 }
 
+function embeddedExtra(kind: 'tiff' | 'dib' | 'pict', data: Uint8Array): Uint8Array {
+  if (kind === 'pict') {
+    const header = concat([new Uint8Array(28), u32(data.length), u8(1, 0)])
+    return escher(0xf01c, concat([new Uint8Array(16), header, data]))
+  }
+  return escher(kind === 'tiff' ? 0xf029 : 0xf01f, concat([new Uint8Array(16), u8(0), data]))
+}
+
 /** OfficeArtDggContainer with a BStore of FBSE entries carrying embedded blips. */
 function drawingGroup(
   images: Uint8Array[],
   metafiles: Array<{ kind: 'emf' | 'wmf'; data: Uint8Array }>,
+  extras: Array<{ kind: 'tiff' | 'dib' | 'pict'; data: Uint8Array }>,
 ): Uint8Array {
   const blips = [
     ...images.map(embeddedPng),
     ...metafiles.map((m) => embeddedMetafile(m.kind, m.data)),
+    ...extras.map((e) => embeddedExtra(e.kind, e.data)),
   ]
   const entries = blips.map((blip) => {
     const header = concat([
@@ -325,6 +399,15 @@ function textMasterStyle(spec: { textType: number; sizePt: number; fontRef?: num
   if (withFont) fields.push(u16(spec.fontRef!)) // ansiFontRef precedes fontSize
   fields.push(u16(spec.sizePt))
   return record(0x0fa3, concat([u16(1), ...fields]), spec.textType)
+}
+
+/** NotesContainer holding one OfficeArtClientTextbox of speaker note text. */
+function notesContainer(text: string): Uint8Array {
+  const textbox = escher(0xf00d, concat([textHeader(2), textChars(text)]))
+  const sp = escherContainer(0xf004, [textbox])
+  const spgr = escherContainer(0xf003, [sp])
+  const dg = escherContainer(0xf002, [spgr])
+  return record(0x03f0, concat([slideAtom(), escherContainer(0x040c, [dg])]), 0, 0xf)
 }
 
 /** MainMasterContainer: the master's own PPDrawing, inherited by every slide. */
@@ -397,6 +480,7 @@ export function buildPptStreams(
           ...(options.fonts ? [fontCollection(options.fonts)] : []),
           ...(options.textMasterStyles ?? []).map(textMasterStyle),
           ...(options.master ? [masterContainer(options.master)] : []),
+          ...(options.notes ?? []).map(notesContainer),
           record(0x0ff0, concat(listParts), 0, 0xf),
           record(0x03ea, new Uint8Array(0)),
         ]),
@@ -439,7 +523,9 @@ export function buildPptStreams(
   // the global drawing group is a top-level record; the reader scans for its
   // BStore independently of the change directory
   const metafiles = options.metafiles ?? []
-  if (images.length > 0 || metafiles.length > 0) push(drawingGroup(images, metafiles))
+  const extras = options.extraBlips ?? []
+  if (images.length > 0 || metafiles.length > 0 || extras.length > 0)
+    push(drawingGroup(images, metafiles, extras))
 
   const currentUser = record(
     0x0ff6,

@@ -63,6 +63,8 @@ export interface PptPresentation {
   master: PptMaster | null
   /** deck-wide typefaces and master text styles, used as run defaults */
   masterStyles: PptMasterStyles
+  /** speaker notes, one entry per slide in document order */
+  notes: string[][]
 }
 
 /**
@@ -311,6 +313,7 @@ export function parsePptPresentation(
       documentRecord.offset + documentRecord.length,
     ),
     masterStyles: masterStylesOf(document),
+    notes: notesOf(document),
   }
 }
 
@@ -414,4 +417,39 @@ function recordAt(stream: Uint8Array, offset: number): PptRecord | null {
   const length = viewOf(stream.subarray(offset + 4, offset + 8)).getUint32(0, true)
   if (offset + 8 + length > stream.length) return null
   return { version: head & 0x000f, instance: head >> 4, type, length, offset: offset + 8 }
+}
+
+/** Speaker notes. NotesContainer records carry a NotesAtom with the owning
+ *  slide id; without a reliable mapping in a damaged deck, their text is kept
+ *  in document order and the writer attaches them to slides by index. */
+function notesOf(document: Uint8Array): string[][] {
+  const out: string[][] = []
+  const collect = (from: number, to: number, depth: number, texts: string[]): void => {
+    if (depth > MAX_RECORD_DEPTH) return
+    for (const record of walkRecords(document, from, to)) {
+      if (record.type === PPT_TYPES.textCharsAtom || record.type === PPT_TYPES.textBytesAtom) {
+        texts.push(textOf(document, record))
+        continue
+      }
+      if (isRecordContainer(record)) {
+        collect(record.offset, record.offset + record.length, depth + 1, texts)
+      }
+    }
+  }
+  const walk = (from: number, to: number, depth: number): void => {
+    if (depth > MAX_RECORD_DEPTH) return
+    for (const record of walkRecords(document, from, to)) {
+      if (record.type === PPT_TYPES.notesContainer) {
+        const texts: string[] = []
+        collect(record.offset, record.offset + record.length, 0, texts)
+        out.push(texts.filter((text) => text.trim().length > 0))
+        continue
+      }
+      if (isRecordContainer(record)) {
+        walk(record.offset, record.offset + record.length, depth + 1)
+      }
+    }
+  }
+  walk(0, document.length, 0)
+  return out
 }

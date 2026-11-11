@@ -84,8 +84,15 @@ export interface PptShape {
 
 export interface PptImage {
   bytes: Uint8Array
-  ext: 'png' | 'jpg' | 'emf' | 'wmf'
-  contentType: 'image/png' | 'image/jpeg' | 'image/x-emf' | 'image/x-wmf'
+  ext: 'png' | 'jpg' | 'emf' | 'wmf' | 'tiff' | 'bmp' | 'pict'
+  contentType:
+    | 'image/png'
+    | 'image/jpeg'
+    | 'image/x-emf'
+    | 'image/x-wmf'
+    | 'image/tiff'
+    | 'image/bmp'
+    | 'image/x-pict'
 }
 const PLACEHOLDER_ATOM = 0x0bc3
 
@@ -253,19 +260,32 @@ function mapRect(child: EscherRect, bounds: EscherRect, outer: EscherRect): Esch
 /** Every leaf SpContainer under a drawing. A group's first shape is the group
  *  itself: its FSPGR bounds describe the child coordinate space and its anchor
  *  the outer rectangle, so member anchors are mapped into slide coordinates. */
+interface GroupTransform {
+  bounds: EscherRect
+  outer: EscherRect
+}
+
+/** A child group's outer rectangle is itself expressed in the parent group's
+ *  coordinate space, so nesting composes by mapping that outer rect first. */
+function combineTransforms(parent: GroupTransform | null, local: GroupTransform): GroupTransform {
+  if (!parent) return local
+  return { bounds: local.bounds, outer: mapRect(local.outer, parent.bounds, parent.outer) }
+}
+
+/** Every leaf SpContainer under a drawing. A group's first shape is the group
+ *  itself: its FSPGR bounds describe the child coordinate space and its anchor
+ *  the outer rectangle, so member anchors are mapped into slide coordinates. */
 export function shapesOf(bytes: Uint8Array, from: number, to: number): PptShape[] {
   const out: PptShape[] = []
-  const emit = (
-    record: EscherRecord,
-    bounds: EscherRect | null,
-    outer: EscherRect | null,
-  ): void => {
+  const emit = (record: EscherRecord, transform: GroupTransform | null): void => {
     if (out.length >= MAX_SHAPES) return
     const shape = parseShape(bytes, record)
-    if (shape.rect && bounds && outer) shape.rect = mapRect(shape.rect, bounds, outer)
+    if (shape.rect && transform) {
+      shape.rect = mapRect(shape.rect, transform.bounds, transform.outer)
+    }
     if ((shape.flags & (FSP.group | FSP.patriarch | FSP.deleted)) === 0) out.push(shape)
   }
-  const walk = (start: number, end: number, depth: number): void => {
+  const walk = (start: number, end: number, depth: number, parent: GroupTransform | null): void => {
     if (depth > MAX_DEPTH) return
     for (const record of children(bytes, start, end)) {
       if (record.type === ESCHER.spgrContainer) {
@@ -278,21 +298,22 @@ export function shapesOf(bytes: Uint8Array, from: number, to: number): PptShape[
         const isGroup = group !== null && (group.flags & (FSP.group | FSP.patriarch)) !== 0
         const bounds = isGroup ? group.groupBounds : null
         const outer = isGroup ? group.rect : null
+        const transform = bounds && outer ? combineTransforms(parent, { bounds, outer }) : parent
         const childrenShapes = isGroup ? rest : members
-        for (const member of childrenShapes) emit(member, bounds, outer)
+        for (const member of childrenShapes) emit(member, transform)
         for (const child of nested.filter((r) => r.type === ESCHER.spgrContainer)) {
-          walk(child.start, child.end, depth + 1)
+          walk(child.start, child.end, depth + 1, transform)
         }
         continue
       }
       if (record.type === ESCHER.spContainer) {
-        emit(record, null, null)
+        emit(record, parent)
         continue
       }
-      if (record.version === 0xf) walk(record.start, record.end, depth + 1)
+      if (record.version === 0xf) walk(record.start, record.end, depth + 1, parent)
     }
   }
-  walk(from, to, 0)
+  walk(from, to, 0, null)
   return out
 }
 
@@ -301,17 +322,39 @@ const BLIP_PNG = 0xf01e
 const BLIP_JPEG = new Set([0xf01d, 0xf02a])
 const BLIP_EMF = 0xf01a
 const BLIP_WMF = 0xf01b
+const BLIP_PICT = 0xf01c
+const BLIP_DIB = 0xf01f
+const BLIP_TIFF = 0xf029
 const TWO_UID_INSTANCES: Record<number, number[]> = {
   [BLIP_PNG]: [0x6e1],
   0xf01d: [0x46b, 0x6e3],
   0xf02a: [0x46b, 0x6e3],
 }
 
+function dibToBmp(dib: Uint8Array): Uint8Array | null {
+  if (dib.length < 40) return null
+  const dv = viewOf(dib)
+  const headerSize = dv.getUint32(0, true)
+  const bitCount = dv.getUint16(14, true)
+  const compression = dv.getUint32(16, true)
+  const colorsUsed = dv.getUint32(32, true)
+  let colorTable = bitCount <= 8 ? (colorsUsed || 1 << bitCount) * 4 : 0
+  if (compression === 3 && headerSize === 40) colorTable += 12
+  const out = new Uint8Array(14 + dib.length)
+  out[0] = 0x42
+  out[1] = 0x4d
+  const ov = viewOf(out)
+  ov.setUint32(2, out.length, true)
+  ov.setUint32(10, 14 + headerSize + colorTable, true)
+  out.set(dib, 14)
+  return out
+}
+
 /** Decode one embedded OfficeArtBlip: UID bytes, then a tag byte, then data. */
 function readBlip(bytes: Uint8Array, offset: number, limit: number): PptImage | null {
   const record = recordAt(bytes, offset, limit)
   if (!record) return null
-  if (record.type === BLIP_EMF || record.type === BLIP_WMF) {
+  if (record.type === BLIP_EMF || record.type === BLIP_WMF || record.type === BLIP_PICT) {
     // OfficeArtBlipEMF/WMF: UID (32 bytes for the two-UID instances), then a
     // 34-byte metafile header whose cbSave names the decompressed size.
     const twoUid =
@@ -335,23 +378,39 @@ function readBlip(bytes: Uint8Array, offset: number, limit: number): PptImage | 
     if (payload.length === 0) return null
     return record.type === BLIP_EMF
       ? { bytes: payload, ext: 'emf', contentType: 'image/x-emf' }
-      : { bytes: payload, ext: 'wmf', contentType: 'image/x-wmf' }
+      : record.type === BLIP_WMF
+        ? { bytes: payload, ext: 'wmf', contentType: 'image/x-wmf' }
+        : { bytes: payload, ext: 'pict', contentType: 'image/x-pict' }
   }
   let image: PptImage
   if (record.type === BLIP_PNG) {
     image = { bytes: new Uint8Array(0), ext: 'png', contentType: 'image/png' }
   } else if (BLIP_JPEG.has(record.type)) {
     image = { bytes: new Uint8Array(0), ext: 'jpg', contentType: 'image/jpeg' }
+  } else if (record.type === BLIP_TIFF) {
+    image = { bytes: new Uint8Array(0), ext: 'tiff', contentType: 'image/tiff' }
+  } else if (record.type === BLIP_DIB) {
+    image = { bytes: new Uint8Array(0), ext: 'bmp', contentType: 'image/bmp' }
   } else {
-    return null // metafiles, DIB, TIFF and PICT are not carried by stage 3
+    return null
   }
   const twoUid = TWO_UID_INSTANCES[record.type]?.includes(record.instance) ?? false
   const start = record.start + (twoUid ? 32 : 16) + 1
   if (start >= record.end) return null
-  const data = bytes.slice(start, record.end)
+  let data: Uint8Array = bytes.slice(start, record.end)
   // sanity: a PNG signature or a JPEG SOI marker, so a garbage blip is dropped
   if (image.ext === 'png' && !(data[0] === 0x89 && data[1] === 0x50)) return null
   if (image.ext === 'jpg' && !(data[0] === 0xff && data[1] === 0xd8)) return null
+  if (
+    image.ext === 'tiff' &&
+    !((data[0] === 0x49 && data[1] === 0x49) || (data[0] === 0x4d && data[1] === 0x4d))
+  )
+    return null
+  if (image.ext === 'bmp') {
+    const bmp = dibToBmp(data)
+    if (!bmp) return null
+    data = bmp
+  }
   return { ...image, bytes: data }
 }
 
