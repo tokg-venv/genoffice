@@ -204,6 +204,11 @@ function sentenceEndAfter(text: string, at: number): number {
  * the previous terminator's trailing whitespace to the next terminator's own
  * trailing whitespace. A block without a terminator reads as one sentence, and
  * the ranges always cover the whole block.
+ *
+ * A caret that is not inside a sentence yet (right after a terminator, in the
+ * gap before the next sentence's first character, or at the end of a block
+ * that ends on a stop) keeps the sentence it just finished: clicking to the
+ * end of a sentence lights that sentence, never the next one or nothing.
  */
 export function storyFocusSentence(text: string, cursor: number): [number, number] {
   let start = 0
@@ -213,9 +218,10 @@ export function storyFocusSentence(text: string, cursor: number): [number, numbe
       continue
     }
     // the terminator's trailing whitespace belongs to the gap between the
-    // sentences; the next sentence starts after it. A caret inside that gap is
-    // about to write the next one — that one stays visible.
-    i = start = sentenceEndAfter(text, i)
+    // sentences; the next sentence starts after it
+    const next = sentenceEndAfter(text, i)
+    if (cursor < next || next >= text.length) return [start, next]
+    i = start = next
   }
   let end = text.length
   for (let k = cursor; k < text.length; k++) {
@@ -339,26 +345,33 @@ function runTypewriterScroll(view: EditorView): void {
  * paragraph is always the writing spot), and the active block keeps itself
  * visible entirely when it holds an inline object: a text index is not a
  * position there, so the sentence ranges could not be drawn safely.
+ *
+ * Every text block counts, wherever it sits: a table cell's paragraphs (and a
+ * nested table's) dim like the body's, and the caret's sentence inside a cell
+ * stays lit the same way.
  */
 function buildFocusDim(doc: ProseMirrorNode, head: number): Decoration[] {
   const decos: Decoration[] = []
-  doc.forEach((node, offset) => {
-    if (!node.isTextblock || node.content.size === 0) return
-    const start = offset + 1
-    const end = offset + node.nodeSize - 1
+  doc.descendants((node, pos) => {
+    // walk into tables, cells and any other container; stop at a text block
+    if (!node.isTextblock) return true
+    if (node.content.size === 0) return false
+    const start = pos + 1
+    const end = pos + node.nodeSize - 1
     // a boundary position (caret between blocks) belongs to both blocks it
     // sits against: pos == this block's start, pos == this block's end + 1 —
     // each keeps its sentence visible around the caret
-    if (head < offset || head > offset + node.nodeSize) {
+    if (head < pos || head > pos + node.nodeSize) {
       decos.push(Decoration.inline(start, end, { class: 'story-dim' }))
-      return
+      return false
     }
-    if (node.content.size !== node.textContent.length) return
+    if (node.content.size !== node.textContent.length) return false
     const cursor = Math.min(Math.max(head - start, 0), node.textContent.length)
     const [sFrom, sTo] = storyFocusSentence(node.textContent, cursor)
     if (sFrom > 0) decos.push(Decoration.inline(start, start + sFrom, { class: 'story-dim' }))
     if (sTo < node.textContent.length)
       decos.push(Decoration.inline(start + sTo, end, { class: 'story-dim' }))
+    return false
   })
   return decos
 }
@@ -446,7 +459,9 @@ export const StoryViewExtension = Extension.create({
             const active = meta?.active ?? value.active
             const focus = meta?.focus ?? value.focus
             // focus rides the caret: a selection-only transaction repaints the
-            // dim ranges too
+            // dim ranges too. A selection pauses the dim (the whole text shows
+            // while you select, by mouse or by keyboard, for Bold, Italic or
+            // Link) and Focus picks back up when it collapses to a caret.
             if (
               active === value.active &&
               focus === value.focus &&
@@ -460,7 +475,9 @@ export const StoryViewExtension = Extension.create({
               decorations: active
                 ? DecorationSet.create(tr.doc, [
                     ...buildStoryDecorations(tr.doc, styles()),
-                    ...(focus ? buildFocusDim(tr.doc, tr.selection.head) : []),
+                    ...(focus && tr.selection.empty
+                      ? buildFocusDim(tr.doc, tr.selection.head)
+                      : []),
                   ])
                 : DecorationSet.empty,
             }

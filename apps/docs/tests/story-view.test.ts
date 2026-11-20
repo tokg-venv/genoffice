@@ -298,11 +298,41 @@ describe('story view Focus: the sentence the caret sits in', () => {
     expect(text.slice(from, to)).toBe('\u7B2C\u4E8C\uFF01')
   })
 
-  it('the caret in the gap after a terminator starts the next sentence', () => {
+  it('the caret in the gap after a terminator keeps the sentence it finished', () => {
     const text = 'First one ends here.  Second starts.'
-    // the caret on the second space of the gap: the next sentence is active
+    // the caret on the second space of the gap: not inside the next sentence
+    // yet, so the one just finished stays lit
     const [from, to] = storyFocusSentence(text, 21)
-    expect(text.slice(from, to)).toBe('Second starts.')
+    expect(text.slice(from, to)).toBe('First one ends here.  ')
+  })
+
+  it('the caret right after a terminator keeps that sentence, not the next', () => {
+    const text = 'First one. Second one.'
+    // clicking to the end of the first sentence, before its trailing space
+    const [from, to] = storyFocusSentence(text, 10)
+    expect(text.slice(from, to)).toBe('First one. ')
+  })
+
+  it('the caret at the end of a block that ends on a stop keeps the last sentence', () => {
+    const text = 'First one. Second one.'
+    const [from, to] = storyFocusSentence(text, text.length)
+    expect(text.slice(from, to)).toBe('Second one.')
+    // the same with a trailing space typed after the stop
+    const spaced = 'First one. Second one. '
+    const [sFrom, sTo] = storyFocusSentence(spaced, spaced.length)
+    expect(spaced.slice(sFrom, sTo)).toBe('Second one. ')
+  })
+
+  it('the caret between a terminator and its closing quote keeps that sentence', () => {
+    const text = 'He said "Stop." Then he left.'
+    const [from, to] = storyFocusSentence(text, 14)
+    expect(text.slice(from, to)).toBe('He said "Stop." ')
+  })
+
+  it('the caret on the next sentence’s first character moves to that sentence', () => {
+    const text = 'First one. Second one.'
+    const [from, to] = storyFocusSentence(text, 11)
+    expect(text.slice(from, to)).toBe('Second one.')
   })
 
   it('a dot inside a number does not end a sentence', () => {
@@ -458,6 +488,90 @@ describe('story view Focus: the dim ranges', () => {
     // the second block (inline object) dims whole; the active block's sentence
     // logic ran without touching positions it could not compute
     expect(dimmedText(editor)).toContain('With an object.')
+    editor.destroy()
+  })
+
+  const WITH_TABLE = {
+    type: 'doc',
+    content: [
+      { type: 'docParagraph', content: [{ type: 'text', text: 'Body text. More body.' }] },
+      {
+        type: 'docTable',
+        content: [
+          {
+            type: 'docTableRow',
+            content: [
+              {
+                type: 'docTableCell',
+                content: [
+                  {
+                    type: 'docParagraph',
+                    content: [{ type: 'text', text: 'Cell one. Cell two.' }],
+                  },
+                ],
+              },
+              {
+                type: 'docTableCell',
+                content: [
+                  { type: 'docParagraph', content: [{ type: 'text', text: 'Other cell.' }] },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+
+  /** the document position of the first match of `needle`, plus `at` */
+  function posOf(editor: Editor, needle: string, at = 0): number {
+    let found = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (found >= 0 || !node.isText) return
+      const i = (node.text ?? '').indexOf(needle)
+      if (i >= 0) found = pos + i + at
+    })
+    return found
+  }
+
+  it('dims the text inside a table when the caret is in the body', () => {
+    const editor = makeEditor(WITH_TABLE)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(posOf(editor, 'Body', 2))
+    const dim = dimmedText(editor)
+    expect(dim).toContain('Cell one. Cell two.')
+    expect(dim).toContain('Other cell.')
+    expect(dim).not.toContain('Body text.')
+    editor.destroy()
+  })
+
+  it("keeps the caret's sentence lit inside a table cell and dims the rest", () => {
+    const editor = makeEditor(WITH_TABLE)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(posOf(editor, 'Cell two', 2))
+    const dim = dimmedText(editor)
+    expect(dim).not.toContain('Cell two.')
+    expect(dim).toContain('Cell one.')
+    expect(dim).toContain('Other cell.')
+    expect(dim).toContain('Body text. More body.')
+    editor.destroy()
+  })
+
+  it('a selection pauses the dim, and a caret brings it back', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(23)
+    expect(dimmedText(editor)).not.toBe('')
+    // a range across sentences (mouse drag or Shift+arrows): everything shows
+    editor.commands.setTextSelection({ from: 3, to: 30 })
+    expect(editor.view.dom.querySelectorAll('.story-dim')).toHaveLength(0)
+    // collapsed back to a caret: Focus resumes around it
+    editor.commands.setTextSelection(30)
+    expect(dimmedText(editor)).toContain('First one ends here.')
+    expect(dimmedText(editor)).not.toContain('Second')
     editor.destroy()
   })
 })
