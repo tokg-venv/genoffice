@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Node as PmNode } from '@tiptap/pm/model'
+import { TextSelection } from '@tiptap/pm/state'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import {
   storyEscLeavesView,
@@ -22,6 +23,7 @@ import {
   storyScrollHost,
   storyTypewriterDelta,
   storyTypewriterScrollDue,
+  storyViewKey,
   type StoryStyle,
   type StoryStyles,
 } from '../src/renderer/editor/story-view'
@@ -690,5 +692,43 @@ describe('Focus typewriter scroll: the caret line keeps to the middle', () => {
         { active: false, collapsed: true, head: 10 },
       ),
     ).toBe(false)
+  })
+
+  // the press that starts a drag lands a collapsed caret first; centering it
+  // moved the text out from under the pointer before the drag could begin
+  it('a caret the mouse put down does not re-center', () => {
+    expect(
+      storyTypewriterScrollDue(
+        { active: true, head: 10 },
+        { active: true, collapsed: true, head: 40, pointer: true },
+      ),
+    ).toBe(false)
+  })
+
+  it('the view state knows a mouse move from typing and the arrow keys', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    const pointer = () => storyViewKey.getState(editor.state)?.pointer
+    // a click: ProseMirror marks the transaction "pointer"
+    editor.view.dispatch(
+      editor.state.tr
+        .setSelection(TextSelection.create(editor.state.doc, 30))
+        .setMeta('pointer', true),
+    )
+    expect(pointer()).toBe(true)
+    // the next keystroke clears it, so typing centers the line again
+    editor.view.dispatch(editor.state.tr.insertText('x'))
+    expect(pointer()).toBe(false)
+    // an arrow key (a selection move with no pointer mark) also counts as the user's
+    editor.view.dispatch(
+      editor.state.tr
+        .setMeta('pointer', true)
+        .setSelection(TextSelection.create(editor.state.doc, 5)),
+    )
+    expect(pointer()).toBe(true)
+    editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 6)))
+    expect(pointer()).toBe(false)
+    editor.destroy()
   })
 })

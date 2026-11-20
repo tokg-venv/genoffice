@@ -57,6 +57,8 @@ export type StoryStyles = ReadonlyMap<string, StoryStyle>
 export interface StoryViewState {
   active: boolean
   focus: boolean
+  /** the caret's last move came from the mouse (a click or a drag) */
+  pointer: boolean
   decorations: DecorationSet
 }
 
@@ -309,16 +311,20 @@ export function storyTypewriterDelta(
  * does: a transaction that leaves the selection alone (a remote or AI edit, a
  * decoration refresh) must not yank the viewport back to the caret the user
  * may have scrolled away from, and a drag selection (a range) never scrolls —
- * the line would follow the selection head every frame. Focus just switching
- * on scrolls once, the same way.
+ * the line would follow the selection head every frame. A caret the mouse put
+ * down never scrolls either: the press that starts a drag lands a collapsed
+ * caret first, and centering it moved the text out from under the pointer
+ * before the drag began. iA Writer's rule — a click leaves the page where it
+ * is, the next keystroke centers the line. Focus just switching on scrolls
+ * once, the same way.
  */
 export function storyTypewriterScrollDue(
   prev: { active: boolean; head: number } | null,
-  next: { active: boolean; collapsed: boolean; head: number },
+  next: { active: boolean; collapsed: boolean; head: number; pointer?: boolean },
 ): boolean {
   if (!next.active) return false
   if (!prev?.active) return true
-  if (!next.collapsed) return false
+  if (!next.collapsed || next.pointer) return false
   return next.head !== prev.head
 }
 
@@ -453,11 +459,25 @@ export const StoryViewExtension = Extension.create({
       new Plugin({
         key: storyViewKey,
         state: {
-          init: () => ({ active: false, focus: false, decorations: DecorationSet.empty }),
+          init: () => ({
+            active: false,
+            focus: false,
+            pointer: false,
+            decorations: DecorationSet.empty,
+          }),
           apply(tr, value) {
             const meta = tr.getMeta(storyViewKey) as StoryViewMeta | undefined
             const active = meta?.active ?? value.active
             const focus = meta?.focus ?? value.focus
+            // whether the caret's last move came from the mouse (ProseMirror
+            // marks those transactions "pointer"); typing and the arrow keys
+            // clear it, so the typewriter scroll knows which moves are its own
+            const pointer =
+              tr.getMeta('pointer') === true
+                ? true
+                : tr.docChanged || tr.selectionSet
+                  ? false
+                  : value.pointer
             // focus rides the caret: a selection-only transaction repaints the
             // dim ranges too. A selection pauses the dim (the whole text shows
             // while you select, by mouse or by keyboard, for Bold, Italic or
@@ -465,6 +485,7 @@ export const StoryViewExtension = Extension.create({
             if (
               active === value.active &&
               focus === value.focus &&
+              pointer === value.pointer &&
               !tr.docChanged &&
               !(active && focus && tr.selectionSet)
             )
@@ -472,6 +493,7 @@ export const StoryViewExtension = Extension.create({
             return {
               active,
               focus,
+              pointer,
               decorations: active
                 ? DecorationSet.create(tr.doc, [
                     ...buildStoryDecorations(tr.doc, styles()),
@@ -504,7 +526,8 @@ export const StoryViewExtension = Extension.create({
           // time. ProseMirror's own scrollIntoView has already run by then and
           // only guarantees visibility — this moves the line the rest of the
           // way to the middle. Updates that do not move the caret (a remote or
-          // AI edit, a decoration refresh) and drag selections never scroll.
+          // AI edit, a decoration refresh), drag selections and a caret the
+          // mouse put down never scroll.
           let raf = 0
           let prev: { active: boolean; head: number } | null = null
           return {
@@ -514,6 +537,7 @@ export const StoryViewExtension = Extension.create({
                 active: !!(st?.active && st.focus),
                 collapsed: v.state.selection.empty,
                 head: v.state.selection.head,
+                pointer: !!st?.pointer,
               }
               const due = storyTypewriterScrollDue(prev, next)
               prev = { active: next.active, head: next.head }
