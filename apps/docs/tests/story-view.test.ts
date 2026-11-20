@@ -24,6 +24,7 @@ import {
   storyTypewriterDelta,
   storyTypewriterScrollDue,
   storyViewKey,
+  STORY_DRAG_SLOP,
   type StoryStyle,
   type StoryStyles,
 } from '../src/renderer/editor/story-view'
@@ -729,6 +730,95 @@ describe('Focus typewriter scroll: the caret line keeps to the middle', () => {
     expect(pointer()).toBe(true)
     editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 6)))
     expect(pointer()).toBe(false)
+    editor.destroy()
+  })
+})
+
+describe('Focus pauses once a press becomes a drag', () => {
+  const press = (target: EventTarget, type: string, x = 0, y = 0) =>
+    target.dispatchEvent(new MouseEvent(type, { button: 0, bubbles: true, clientX: x, clientY: y }))
+
+  it('a plain click never lifts the dim, so moving the caret does not flash the page', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(23)
+    press(editor.view.dom, 'pointerdown', 100, 100)
+    // a hand's tremor under the slop is still a click
+    press(window, 'pointermove', 102, 101)
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(false)
+    press(window, 'pointerup', 102, 101)
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(false)
+    editor.destroy()
+  })
+
+  it('moving past the slop lifts the dim at once, and the release brings it back', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(23)
+    const before = editor.view.dom.querySelectorAll('.story-dim').length
+    press(editor.view.dom, 'pointerdown', 100, 100)
+    press(window, 'pointermove', 100 + STORY_DRAG_SLOP, 100)
+    // the class lifts the dim; the dim spans themselves are left alone, so
+    // nothing under the pointer is redrawn as the drag goes on
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(true)
+    expect(editor.view.dom.querySelectorAll('.story-dim')).toHaveLength(before)
+    press(window, 'pointerup')
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(false)
+    editor.destroy()
+  })
+
+  it('a press with Focus off changes nothing, and a lost window focus ends the pause', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(false)
+    press(editor.view.dom, 'pointerdown', 0, 0)
+    press(window, 'pointermove', 20, 0)
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(false)
+    press(window, 'pointerup')
+    editor.commands.setStoryViewFocus(true)
+    press(editor.view.dom, 'pointerdown', 0, 0)
+    press(window, 'pointermove', 20, 0)
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(true)
+    window.dispatchEvent(new Event('blur'))
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(false)
+    expect(storyViewKey.getState(editor.state)?.held).toBe(false)
+    editor.destroy()
+  })
+
+  it('the stylesheet lifts the dim under the lifted class', () => {
+    expect(blocksFor('.view-story .story-lifted .story-dim')).toContain('opacity: 1')
+  })
+})
+
+describe('Focus holds its dim still while a press is down', () => {
+  const press = (target: EventTarget, type: string) =>
+    target.dispatchEvent(new MouseEvent(type, { button: 0, bubbles: true }))
+
+  // the press lands its caret before a drag begins; repainting the dim then
+  // replaced the text node under the pointer and the browser lost the drag
+  it('the caret a press lands does not redraw the text, and the release repaints once', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(23) // inside "Second"
+    const before = [...editor.view.dom.querySelectorAll('.story-dim')]
+    press(editor.view.dom, 'pointerdown')
+    editor.view.dispatch(
+      editor.state.tr
+        .setSelection(TextSelection.create(editor.state.doc, 2)) // inside "First"
+        .setMeta('pointer', true),
+    )
+    const during = [...editor.view.dom.querySelectorAll('.story-dim')]
+    expect(during).toHaveLength(before.length)
+    during.forEach((el, i) => expect(el).toBe(before[i]))
+    press(window, 'pointerup')
+    const dim = [...editor.view.dom.querySelectorAll('.story-dim')]
+      .map((el) => el.textContent)
+      .join('\n')
+    expect(dim).not.toContain('First')
+    expect(dim).toContain('Second one goes on.')
     editor.destroy()
   })
 })

@@ -59,6 +59,10 @@ export interface StoryViewState {
   focus: boolean
   /** the caret's last move came from the mouse (a click or a drag) */
   pointer: boolean
+  /** the mouse button is down in the editor: the dim is frozen while it is */
+  held: boolean
+  /** the held press has become a drag: the dim lifts until the release */
+  lifted: boolean
   decorations: DecorationSet
 }
 
@@ -419,9 +423,15 @@ export function stripHiddenMarksFromTypedText(
   return changed ? tr : null
 }
 
+/** how far a held press moves before it counts as a drag, in CSS pixels; the
+    platform's own click-vs-drag slop is about this size */
+export const STORY_DRAG_SLOP = 4
+
 interface StoryViewMeta {
   active?: boolean
   focus?: boolean
+  held?: boolean
+  lifted?: boolean
 }
 
 export const StoryViewExtension = Extension.create({
@@ -463,12 +473,16 @@ export const StoryViewExtension = Extension.create({
             active: false,
             focus: false,
             pointer: false,
+            held: false,
+            lifted: false,
             decorations: DecorationSet.empty,
           }),
           apply(tr, value) {
             const meta = tr.getMeta(storyViewKey) as StoryViewMeta | undefined
             const active = meta?.active ?? value.active
             const focus = meta?.focus ?? value.focus
+            const held = meta?.held ?? value.held
+            const lifted = held && (meta?.lifted ?? value.lifted)
             // whether the caret's last move came from the mouse (ProseMirror
             // marks those transactions "pointer"); typing and the arrow keys
             // clear it, so the typewriter scroll knows which moves are its own
@@ -482,10 +496,22 @@ export const StoryViewExtension = Extension.create({
             // dim ranges too. A selection pauses the dim (the whole text shows
             // while you select, by mouse or by keyboard, for Bold, Italic or
             // Link) and Focus picks back up when it collapses to a caret.
+            const sameMode = active === value.active && focus === value.focus
+            // while the button is held the dim is frozen, and the decorations
+            // wait for the release. Redrawing them as the press lands its
+            // caret replaced the text node under the pointer, and the browser
+            // lost the drag's anchor: the caret followed the mouse, nothing
+            // selected. Once the press becomes a drag a class lifts the dim
+            // (props.attributes); the release (held going false) repaints once.
+            if (sameMode && held && !tr.docChanged)
+              return pointer === value.pointer && held === value.held && lifted === value.lifted
+                ? value
+                : { ...value, pointer, held, lifted }
             if (
-              active === value.active &&
-              focus === value.focus &&
+              sameMode &&
               pointer === value.pointer &&
+              held === value.held &&
+              lifted === value.lifted &&
               !tr.docChanged &&
               !(active && focus && tr.selectionSet)
             )
@@ -494,6 +520,8 @@ export const StoryViewExtension = Extension.create({
               active,
               focus,
               pointer,
+              held,
+              lifted,
               decorations: active
                 ? DecorationSet.create(tr.doc, [
                     ...buildStoryDecorations(tr.doc, styles()),
@@ -508,6 +536,14 @@ export const StoryViewExtension = Extension.create({
         props: {
           decorations: (state: EditorState) =>
             storyViewKey.getState(state)?.decorations ?? DecorationSet.empty,
+          // Focus pauses the moment a press becomes a drag, before the drag
+          // has crossed a character: the styles lift the dim under .story-lifted.
+          // A plain click never lifts it, so moving the caret does not flash
+          // the whole page; the dim moves to the clicked sentence on release.
+          attributes: (state: EditorState): Record<string, string> => {
+            const st = storyViewKey.getState(state)
+            return st?.active && st.focus && st.lifted ? { class: 'story-lifted' } : {}
+          },
           handleTextInput(view, _from, _to, _text) {
             typed = storyViewKey.getState(view.state)?.active === true
             // the default insertion still runs; the mark is stripped after it
@@ -520,7 +556,7 @@ export const StoryViewExtension = Extension.create({
           if (!storyViewKey.getState(newState)?.active) return null
           return stripHiddenMarksFromTypedText(transactions, newState)
         },
-        view(_editorView) {
+        view(editorView) {
           // the typewriter scroll: with Focus on, a caret the user moved (and
           // the moment Focus switches on) re-centers the caret line at paint
           // time. ProseMirror's own scrollIntoView has already run by then and
@@ -530,6 +566,37 @@ export const StoryViewExtension = Extension.create({
           // mouse put down never scroll.
           let raf = 0
           let prev: { active: boolean; head: number } | null = null
+          // the button held in the editor freezes the dim; moving past the
+          // drag threshold lifts it (see props.attributes). A release
+          // anywhere, a cancelled pointer or the window losing focus ends
+          // both, so the pause can never stick.
+          let downAt: { x: number; y: number } | null = null
+          const send = (meta: StoryViewMeta) =>
+            editorView.dispatch(
+              editorView.state.tr.setMeta(storyViewKey, meta).setMeta('addToHistory', false),
+            )
+          const onDown = (e: PointerEvent) => {
+            const st = storyViewKey.getState(editorView.state)
+            if (e.button !== 0 || !st?.active || !st.focus) return
+            downAt = { x: e.clientX, y: e.clientY }
+            if (!st.held) send({ held: true })
+          }
+          const onMove = (e: PointerEvent) => {
+            if (!downAt) return
+            if (Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < STORY_DRAG_SLOP) return
+            downAt = null
+            const st = storyViewKey.getState(editorView.state)
+            if (st?.held && !st.lifted) send({ lifted: true })
+          }
+          const onUp = () => {
+            downAt = null
+            if (storyViewKey.getState(editorView.state)?.held) send({ held: false, lifted: false })
+          }
+          editorView.dom.addEventListener('pointerdown', onDown)
+          window.addEventListener('pointermove', onMove)
+          window.addEventListener('pointerup', onUp)
+          window.addEventListener('pointercancel', onUp)
+          window.addEventListener('blur', onUp)
           return {
             update(v: EditorView) {
               const st = storyViewKey.getState(v.state)
@@ -558,6 +625,11 @@ export const StoryViewExtension = Extension.create({
             },
             destroy() {
               if (raf) cancelAnimationFrame(raf)
+              editorView.dom.removeEventListener('pointerdown', onDown)
+              window.removeEventListener('pointermove', onMove)
+              window.removeEventListener('pointerup', onUp)
+              window.removeEventListener('pointercancel', onUp)
+              window.removeEventListener('blur', onUp)
             },
           }
         },
