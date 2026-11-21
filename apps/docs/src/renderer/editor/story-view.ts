@@ -57,6 +57,12 @@ export type StoryStyles = ReadonlyMap<string, StoryStyle>
 export interface StoryViewState {
   active: boolean
   focus: boolean
+  /** the caret's last move came from the mouse (a click or a drag) */
+  pointer: boolean
+  /** the mouse button is down in the editor: the dim is frozen while it is */
+  held: boolean
+  /** the held press has become a drag: the dim lifts until the release */
+  lifted: boolean
   decorations: DecorationSet
 }
 
@@ -204,6 +210,11 @@ function sentenceEndAfter(text: string, at: number): number {
  * the previous terminator's trailing whitespace to the next terminator's own
  * trailing whitespace. A block without a terminator reads as one sentence, and
  * the ranges always cover the whole block.
+ *
+ * A caret that is not inside a sentence yet (right after a terminator, in the
+ * gap before the next sentence's first character, or at the end of a block
+ * that ends on a stop) keeps the sentence it just finished: clicking to the
+ * end of a sentence lights that sentence, never the next one or nothing.
  */
 export function storyFocusSentence(text: string, cursor: number): [number, number] {
   let start = 0
@@ -213,9 +224,10 @@ export function storyFocusSentence(text: string, cursor: number): [number, numbe
       continue
     }
     // the terminator's trailing whitespace belongs to the gap between the
-    // sentences; the next sentence starts after it. A caret inside that gap is
-    // about to write the next one — that one stays visible.
-    i = start = sentenceEndAfter(text, i)
+    // sentences; the next sentence starts after it
+    const next = sentenceEndAfter(text, i)
+    if (cursor < next || next >= text.length) return [start, next]
+    i = start = next
   }
   let end = text.length
   for (let k = cursor; k < text.length; k++) {
@@ -303,16 +315,20 @@ export function storyTypewriterDelta(
  * does: a transaction that leaves the selection alone (a remote or AI edit, a
  * decoration refresh) must not yank the viewport back to the caret the user
  * may have scrolled away from, and a drag selection (a range) never scrolls —
- * the line would follow the selection head every frame. Focus just switching
- * on scrolls once, the same way.
+ * the line would follow the selection head every frame. A caret the mouse put
+ * down never scrolls either: the press that starts a drag lands a collapsed
+ * caret first, and centering it moved the text out from under the pointer
+ * before the drag began. iA Writer's rule — a click leaves the page where it
+ * is, the next keystroke centers the line. Focus just switching on scrolls
+ * once, the same way.
  */
 export function storyTypewriterScrollDue(
   prev: { active: boolean; head: number } | null,
-  next: { active: boolean; collapsed: boolean; head: number },
+  next: { active: boolean; collapsed: boolean; head: number; pointer?: boolean },
 ): boolean {
   if (!next.active) return false
   if (!prev?.active) return true
-  if (!next.collapsed) return false
+  if (!next.collapsed || next.pointer) return false
   return next.head !== prev.head
 }
 
@@ -339,26 +355,33 @@ function runTypewriterScroll(view: EditorView): void {
  * paragraph is always the writing spot), and the active block keeps itself
  * visible entirely when it holds an inline object: a text index is not a
  * position there, so the sentence ranges could not be drawn safely.
+ *
+ * Every text block counts, wherever it sits: a table cell's paragraphs (and a
+ * nested table's) dim like the body's, and the caret's sentence inside a cell
+ * stays lit the same way.
  */
 function buildFocusDim(doc: ProseMirrorNode, head: number): Decoration[] {
   const decos: Decoration[] = []
-  doc.forEach((node, offset) => {
-    if (!node.isTextblock || node.content.size === 0) return
-    const start = offset + 1
-    const end = offset + node.nodeSize - 1
+  doc.descendants((node, pos) => {
+    // walk into tables, cells and any other container; stop at a text block
+    if (!node.isTextblock) return true
+    if (node.content.size === 0) return false
+    const start = pos + 1
+    const end = pos + node.nodeSize - 1
     // a boundary position (caret between blocks) belongs to both blocks it
     // sits against: pos == this block's start, pos == this block's end + 1 —
     // each keeps its sentence visible around the caret
-    if (head < offset || head > offset + node.nodeSize) {
+    if (head < pos || head > pos + node.nodeSize) {
       decos.push(Decoration.inline(start, end, { class: 'story-dim' }))
-      return
+      return false
     }
-    if (node.content.size !== node.textContent.length) return
+    if (node.content.size !== node.textContent.length) return false
     const cursor = Math.min(Math.max(head - start, 0), node.textContent.length)
     const [sFrom, sTo] = storyFocusSentence(node.textContent, cursor)
     if (sFrom > 0) decos.push(Decoration.inline(start, start + sFrom, { class: 'story-dim' }))
     if (sTo < node.textContent.length)
       decos.push(Decoration.inline(start + sTo, end, { class: 'story-dim' }))
+    return false
   })
   return decos
 }
@@ -400,9 +423,15 @@ export function stripHiddenMarksFromTypedText(
   return changed ? tr : null
 }
 
+/** how far a held press moves before it counts as a drag, in CSS pixels; the
+    platform's own click-vs-drag slop is about this size */
+export const STORY_DRAG_SLOP = 4
+
 interface StoryViewMeta {
   active?: boolean
   focus?: boolean
+  held?: boolean
+  lifted?: boolean
 }
 
 export const StoryViewExtension = Extension.create({
@@ -440,16 +469,49 @@ export const StoryViewExtension = Extension.create({
       new Plugin({
         key: storyViewKey,
         state: {
-          init: () => ({ active: false, focus: false, decorations: DecorationSet.empty }),
+          init: () => ({
+            active: false,
+            focus: false,
+            pointer: false,
+            held: false,
+            lifted: false,
+            decorations: DecorationSet.empty,
+          }),
           apply(tr, value) {
             const meta = tr.getMeta(storyViewKey) as StoryViewMeta | undefined
             const active = meta?.active ?? value.active
             const focus = meta?.focus ?? value.focus
+            const held = meta?.held ?? value.held
+            const lifted = held && (meta?.lifted ?? value.lifted)
+            // whether the caret's last move came from the mouse (ProseMirror
+            // marks those transactions "pointer"); typing and the arrow keys
+            // clear it, so the typewriter scroll knows which moves are its own
+            const pointer =
+              tr.getMeta('pointer') === true
+                ? true
+                : tr.docChanged || tr.selectionSet
+                  ? false
+                  : value.pointer
             // focus rides the caret: a selection-only transaction repaints the
-            // dim ranges too
+            // dim ranges too. A selection pauses the dim (the whole text shows
+            // while you select, by mouse or by keyboard, for Bold, Italic or
+            // Link) and Focus picks back up when it collapses to a caret.
+            const sameMode = active === value.active && focus === value.focus
+            // while the button is held the dim is frozen, and the decorations
+            // wait for the release. Redrawing them as the press lands its
+            // caret replaced the text node under the pointer, and the browser
+            // lost the drag's anchor: the caret followed the mouse, nothing
+            // selected. Once the press becomes a drag a class lifts the dim
+            // (props.attributes); the release (held going false) repaints once.
+            if (sameMode && held && !tr.docChanged)
+              return pointer === value.pointer && held === value.held && lifted === value.lifted
+                ? value
+                : { ...value, pointer, held, lifted }
             if (
-              active === value.active &&
-              focus === value.focus &&
+              sameMode &&
+              pointer === value.pointer &&
+              held === value.held &&
+              lifted === value.lifted &&
               !tr.docChanged &&
               !(active && focus && tr.selectionSet)
             )
@@ -457,10 +519,15 @@ export const StoryViewExtension = Extension.create({
             return {
               active,
               focus,
+              pointer,
+              held,
+              lifted,
               decorations: active
                 ? DecorationSet.create(tr.doc, [
                     ...buildStoryDecorations(tr.doc, styles()),
-                    ...(focus ? buildFocusDim(tr.doc, tr.selection.head) : []),
+                    ...(focus && tr.selection.empty
+                      ? buildFocusDim(tr.doc, tr.selection.head)
+                      : []),
                   ])
                 : DecorationSet.empty,
             }
@@ -469,6 +536,14 @@ export const StoryViewExtension = Extension.create({
         props: {
           decorations: (state: EditorState) =>
             storyViewKey.getState(state)?.decorations ?? DecorationSet.empty,
+          // Focus pauses the moment a press becomes a drag, before the drag
+          // has crossed a character: the styles lift the dim under .story-lifted.
+          // A plain click never lifts it, so moving the caret does not flash
+          // the whole page; the dim moves to the clicked sentence on release.
+          attributes: (state: EditorState): Record<string, string> => {
+            const st = storyViewKey.getState(state)
+            return st?.active && st.focus && st.lifted ? { class: 'story-lifted' } : {}
+          },
           handleTextInput(view, _from, _to, _text) {
             typed = storyViewKey.getState(view.state)?.active === true
             // the default insertion still runs; the mark is stripped after it
@@ -481,15 +556,47 @@ export const StoryViewExtension = Extension.create({
           if (!storyViewKey.getState(newState)?.active) return null
           return stripHiddenMarksFromTypedText(transactions, newState)
         },
-        view(_editorView) {
+        view(editorView) {
           // the typewriter scroll: with Focus on, a caret the user moved (and
           // the moment Focus switches on) re-centers the caret line at paint
           // time. ProseMirror's own scrollIntoView has already run by then and
           // only guarantees visibility — this moves the line the rest of the
           // way to the middle. Updates that do not move the caret (a remote or
-          // AI edit, a decoration refresh) and drag selections never scroll.
+          // AI edit, a decoration refresh), drag selections and a caret the
+          // mouse put down never scroll.
           let raf = 0
           let prev: { active: boolean; head: number } | null = null
+          // the button held in the editor freezes the dim; moving past the
+          // drag threshold lifts it (see props.attributes). A release
+          // anywhere, a cancelled pointer or the window losing focus ends
+          // both, so the pause can never stick.
+          let downAt: { x: number; y: number } | null = null
+          const send = (meta: StoryViewMeta) =>
+            editorView.dispatch(
+              editorView.state.tr.setMeta(storyViewKey, meta).setMeta('addToHistory', false),
+            )
+          const onDown = (e: PointerEvent) => {
+            const st = storyViewKey.getState(editorView.state)
+            if (e.button !== 0 || !st?.active || !st.focus) return
+            downAt = { x: e.clientX, y: e.clientY }
+            if (!st.held) send({ held: true })
+          }
+          const onMove = (e: PointerEvent) => {
+            if (!downAt) return
+            if (Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < STORY_DRAG_SLOP) return
+            downAt = null
+            const st = storyViewKey.getState(editorView.state)
+            if (st?.held && !st.lifted) send({ lifted: true })
+          }
+          const onUp = () => {
+            downAt = null
+            if (storyViewKey.getState(editorView.state)?.held) send({ held: false, lifted: false })
+          }
+          editorView.dom.addEventListener('pointerdown', onDown)
+          window.addEventListener('pointermove', onMove)
+          window.addEventListener('pointerup', onUp)
+          window.addEventListener('pointercancel', onUp)
+          window.addEventListener('blur', onUp)
           return {
             update(v: EditorView) {
               const st = storyViewKey.getState(v.state)
@@ -497,6 +604,7 @@ export const StoryViewExtension = Extension.create({
                 active: !!(st?.active && st.focus),
                 collapsed: v.state.selection.empty,
                 head: v.state.selection.head,
+                pointer: !!st?.pointer,
               }
               const due = storyTypewriterScrollDue(prev, next)
               prev = { active: next.active, head: next.head }
@@ -517,6 +625,11 @@ export const StoryViewExtension = Extension.create({
             },
             destroy() {
               if (raf) cancelAnimationFrame(raf)
+              editorView.dom.removeEventListener('pointerdown', onDown)
+              window.removeEventListener('pointermove', onMove)
+              window.removeEventListener('pointerup', onUp)
+              window.removeEventListener('pointercancel', onUp)
+              window.removeEventListener('blur', onUp)
             },
           }
         },

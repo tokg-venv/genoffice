@@ -13658,6 +13658,12 @@ body.docs-crop-active
   opacity: 0.25;
 }
 
+/* Focus lifts its dim once a press in the editor becomes a drag, so the text
+   being selected shows (story-view.ts props.attributes) */
+.view-story .story-lifted .story-dim {
+  opacity: 1;
+}
+
 /* ---- Web Layout: document fills the window width, no page chrome ---- */
 
 .view-web {

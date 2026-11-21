@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Node as PmNode } from '@tiptap/pm/model'
+import { TextSelection } from '@tiptap/pm/state'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import {
   storyEscLeavesView,
@@ -22,6 +23,8 @@ import {
   storyScrollHost,
   storyTypewriterDelta,
   storyTypewriterScrollDue,
+  storyViewKey,
+  STORY_DRAG_SLOP,
   type StoryStyle,
   type StoryStyles,
 } from '../src/renderer/editor/story-view'
@@ -298,11 +301,41 @@ describe('story view Focus: the sentence the caret sits in', () => {
     expect(text.slice(from, to)).toBe('\u7B2C\u4E8C\uFF01')
   })
 
-  it('the caret in the gap after a terminator starts the next sentence', () => {
+  it('the caret in the gap after a terminator keeps the sentence it finished', () => {
     const text = 'First one ends here.  Second starts.'
-    // the caret on the second space of the gap: the next sentence is active
+    // the caret on the second space of the gap: not inside the next sentence
+    // yet, so the one just finished stays lit
     const [from, to] = storyFocusSentence(text, 21)
-    expect(text.slice(from, to)).toBe('Second starts.')
+    expect(text.slice(from, to)).toBe('First one ends here.  ')
+  })
+
+  it('the caret right after a terminator keeps that sentence, not the next', () => {
+    const text = 'First one. Second one.'
+    // clicking to the end of the first sentence, before its trailing space
+    const [from, to] = storyFocusSentence(text, 10)
+    expect(text.slice(from, to)).toBe('First one. ')
+  })
+
+  it('the caret at the end of a block that ends on a stop keeps the last sentence', () => {
+    const text = 'First one. Second one.'
+    const [from, to] = storyFocusSentence(text, text.length)
+    expect(text.slice(from, to)).toBe('Second one.')
+    // the same with a trailing space typed after the stop
+    const spaced = 'First one. Second one. '
+    const [sFrom, sTo] = storyFocusSentence(spaced, spaced.length)
+    expect(spaced.slice(sFrom, sTo)).toBe('Second one. ')
+  })
+
+  it('the caret between a terminator and its closing quote keeps that sentence', () => {
+    const text = 'He said "Stop." Then he left.'
+    const [from, to] = storyFocusSentence(text, 14)
+    expect(text.slice(from, to)).toBe('He said "Stop." ')
+  })
+
+  it('the caret on the next sentence’s first character moves to that sentence', () => {
+    const text = 'First one. Second one.'
+    const [from, to] = storyFocusSentence(text, 11)
+    expect(text.slice(from, to)).toBe('Second one.')
   })
 
   it('a dot inside a number does not end a sentence', () => {
@@ -460,6 +493,90 @@ describe('story view Focus: the dim ranges', () => {
     expect(dimmedText(editor)).toContain('With an object.')
     editor.destroy()
   })
+
+  const WITH_TABLE = {
+    type: 'doc',
+    content: [
+      { type: 'docParagraph', content: [{ type: 'text', text: 'Body text. More body.' }] },
+      {
+        type: 'docTable',
+        content: [
+          {
+            type: 'docTableRow',
+            content: [
+              {
+                type: 'docTableCell',
+                content: [
+                  {
+                    type: 'docParagraph',
+                    content: [{ type: 'text', text: 'Cell one. Cell two.' }],
+                  },
+                ],
+              },
+              {
+                type: 'docTableCell',
+                content: [
+                  { type: 'docParagraph', content: [{ type: 'text', text: 'Other cell.' }] },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+
+  /** the document position of the first match of `needle`, plus `at` */
+  function posOf(editor: Editor, needle: string, at = 0): number {
+    let found = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (found >= 0 || !node.isText) return
+      const i = (node.text ?? '').indexOf(needle)
+      if (i >= 0) found = pos + i + at
+    })
+    return found
+  }
+
+  it('dims the text inside a table when the caret is in the body', () => {
+    const editor = makeEditor(WITH_TABLE)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(posOf(editor, 'Body', 2))
+    const dim = dimmedText(editor)
+    expect(dim).toContain('Cell one. Cell two.')
+    expect(dim).toContain('Other cell.')
+    expect(dim).not.toContain('Body text.')
+    editor.destroy()
+  })
+
+  it("keeps the caret's sentence lit inside a table cell and dims the rest", () => {
+    const editor = makeEditor(WITH_TABLE)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(posOf(editor, 'Cell two', 2))
+    const dim = dimmedText(editor)
+    expect(dim).not.toContain('Cell two.')
+    expect(dim).toContain('Cell one.')
+    expect(dim).toContain('Other cell.')
+    expect(dim).toContain('Body text. More body.')
+    editor.destroy()
+  })
+
+  it('a selection pauses the dim, and a caret brings it back', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(23)
+    expect(dimmedText(editor)).not.toBe('')
+    // a range across sentences (mouse drag or Shift+arrows): everything shows
+    editor.commands.setTextSelection({ from: 3, to: 30 })
+    expect(editor.view.dom.querySelectorAll('.story-dim')).toHaveLength(0)
+    // collapsed back to a caret: Focus resumes around it
+    editor.commands.setTextSelection(30)
+    expect(dimmedText(editor)).toContain('First one ends here.')
+    expect(dimmedText(editor)).not.toContain('Second')
+    editor.destroy()
+  })
 })
 
 describe('story view frame: the chrome leaves and Focus dims', () => {
@@ -576,5 +693,132 @@ describe('Focus typewriter scroll: the caret line keeps to the middle', () => {
         { active: false, collapsed: true, head: 10 },
       ),
     ).toBe(false)
+  })
+
+  // the press that starts a drag lands a collapsed caret first; centering it
+  // moved the text out from under the pointer before the drag could begin
+  it('a caret the mouse put down does not re-center', () => {
+    expect(
+      storyTypewriterScrollDue(
+        { active: true, head: 10 },
+        { active: true, collapsed: true, head: 40, pointer: true },
+      ),
+    ).toBe(false)
+  })
+
+  it('the view state knows a mouse move from typing and the arrow keys', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    const pointer = () => storyViewKey.getState(editor.state)?.pointer
+    // a click: ProseMirror marks the transaction "pointer"
+    editor.view.dispatch(
+      editor.state.tr
+        .setSelection(TextSelection.create(editor.state.doc, 30))
+        .setMeta('pointer', true),
+    )
+    expect(pointer()).toBe(true)
+    // the next keystroke clears it, so typing centers the line again
+    editor.view.dispatch(editor.state.tr.insertText('x'))
+    expect(pointer()).toBe(false)
+    // an arrow key (a selection move with no pointer mark) also counts as the user's
+    editor.view.dispatch(
+      editor.state.tr
+        .setMeta('pointer', true)
+        .setSelection(TextSelection.create(editor.state.doc, 5)),
+    )
+    expect(pointer()).toBe(true)
+    editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 6)))
+    expect(pointer()).toBe(false)
+    editor.destroy()
+  })
+})
+
+describe('Focus pauses once a press becomes a drag', () => {
+  const press = (target: EventTarget, type: string, x = 0, y = 0) =>
+    target.dispatchEvent(new MouseEvent(type, { button: 0, bubbles: true, clientX: x, clientY: y }))
+
+  it('a plain click never lifts the dim, so moving the caret does not flash the page', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(23)
+    press(editor.view.dom, 'pointerdown', 100, 100)
+    // a hand's tremor under the slop is still a click
+    press(window, 'pointermove', 102, 101)
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(false)
+    press(window, 'pointerup', 102, 101)
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(false)
+    editor.destroy()
+  })
+
+  it('moving past the slop lifts the dim at once, and the release brings it back', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(23)
+    const before = editor.view.dom.querySelectorAll('.story-dim').length
+    press(editor.view.dom, 'pointerdown', 100, 100)
+    press(window, 'pointermove', 100 + STORY_DRAG_SLOP, 100)
+    // the class lifts the dim; the dim spans themselves are left alone, so
+    // nothing under the pointer is redrawn as the drag goes on
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(true)
+    expect(editor.view.dom.querySelectorAll('.story-dim')).toHaveLength(before)
+    press(window, 'pointerup')
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(false)
+    editor.destroy()
+  })
+
+  it('a press with Focus off changes nothing, and a lost window focus ends the pause', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(false)
+    press(editor.view.dom, 'pointerdown', 0, 0)
+    press(window, 'pointermove', 20, 0)
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(false)
+    press(window, 'pointerup')
+    editor.commands.setStoryViewFocus(true)
+    press(editor.view.dom, 'pointerdown', 0, 0)
+    press(window, 'pointermove', 20, 0)
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(true)
+    window.dispatchEvent(new Event('blur'))
+    expect(editor.view.dom.classList.contains('story-lifted')).toBe(false)
+    expect(storyViewKey.getState(editor.state)?.held).toBe(false)
+    editor.destroy()
+  })
+
+  it('the stylesheet lifts the dim under the lifted class', () => {
+    expect(blocksFor('.view-story .story-lifted .story-dim')).toContain('opacity: 1')
+  })
+})
+
+describe('Focus holds its dim still while a press is down', () => {
+  const press = (target: EventTarget, type: string) =>
+    target.dispatchEvent(new MouseEvent(type, { button: 0, bubbles: true }))
+
+  // the press lands its caret before a drag begins; repainting the dim then
+  // replaced the text node under the pointer and the browser lost the drag
+  it('the caret a press lands does not redraw the text, and the release repaints once', () => {
+    const editor = makeEditor(THREE_SENTENCES)
+    editor.commands.setStoryViewActive(true)
+    editor.commands.setStoryViewFocus(true)
+    editor.commands.setTextSelection(23) // inside "Second"
+    const before = [...editor.view.dom.querySelectorAll('.story-dim')]
+    press(editor.view.dom, 'pointerdown')
+    editor.view.dispatch(
+      editor.state.tr
+        .setSelection(TextSelection.create(editor.state.doc, 2)) // inside "First"
+        .setMeta('pointer', true),
+    )
+    const during = [...editor.view.dom.querySelectorAll('.story-dim')]
+    expect(during).toHaveLength(before.length)
+    during.forEach((el, i) => expect(el).toBe(before[i]))
+    press(window, 'pointerup')
+    const dim = [...editor.view.dom.querySelectorAll('.story-dim')]
+      .map((el) => el.textContent)
+      .join('\n')
+    expect(dim).not.toContain('First')
+    expect(dim).toContain('Second one goes on.')
+    editor.destroy()
   })
 })
